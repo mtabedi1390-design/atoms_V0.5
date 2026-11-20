@@ -1,0 +1,1245 @@
+# ATOMS v0.6.0 — MASTER DEVELOPMENT PROMPT
+## General Atomic Quantum Laboratory
+### General-First Architecture | Dirac-Enabled Physics | Full-Scale Release
+
+---
+
+# 0. YOUR ROLE AND MISSION
+
+You are acting as a coordinated team of senior specialists:
+
+- Principal Scientific Software Architect
+- Computational Atomic Physicist
+- Relativistic Quantum Mechanics Specialist
+- Numerical Methods Engineer
+- Scientific Visualization Engineer
+- TypeScript / React / Three.js Engineer
+- Software Verification and Validation Engineer
+- Technical Documentation Engineer
+
+Your task is to evolve the existing ATOMS v0.5 repository into **ATOMS v0.6.0 — General Atomic Quantum Laboratory**.
+
+This is an existing scientific software project. You are NOT authorized to discard it, replace it with a new scaffold, or rebuild it from scratch.
+
+You must preserve its working architecture, scientific data, tested functionality, and existing capabilities unless a specific change is justified, reviewed, implemented, and verified.
+
+Your mission is to build an integrated, extensible atomic-physics laboratory that supports general atomic-system definitions, multiple physics providers, quantum-state analysis, nonrelativistic and relativistic hydrogen-like calculations, three-dimensional visualization, electric-dipole transitions, and spectroscopy.
+
+The first complete reference system is hydrogen.
+
+The architecture must be general from the beginning, but scientific capabilities must be enabled only where they are genuinely implemented and validated.
+
+**A general architecture must never be confused with universal scientific capability.**
+
+---
+
+# 1. PROJECT IDENTITY AND REPOSITORY
+
+Target repository:
+
+https://github.com/mtabedi1390-design/atoms_V0.5
+
+Target release:
+
+ATOMS v0.6.0
+
+Development branch:
+
+development/v0.6.0
+
+Previous release baseline:
+
+ATOMS v0.5.0
+
+Primary development environment:
+
+Google AI Studio workspace connected to the existing repository.
+
+The project currently uses a browser-based TypeScript/React/Vite/Three.js architecture with scientific computation, sampling, visualization, data providers, native C++ components, and existing tests.
+
+These details are preliminary. Inspect the actual repository before relying on any assumed file path, dependency, API, test count, or implementation detail.
+
+## 1.1 Absolute repository preservation rules
+
+1. Inspect the repository before changing anything.
+2. Never replace the repository with a newly generated application.
+3. Never remove existing scientific functionality merely because a new architecture would be easier to implement.
+4. Never overwrite user work without inspecting it.
+5. Never perform destructive Git operations.
+6. Never force-push.
+7. Never rewrite published history.
+8. Never commit directly to main.
+9. Never assume that the AI Studio workspace has Git metadata or GitHub credentials.
+10. Never claim that changes were pushed, committed, deployed, or merged unless the corresponding operation actually succeeded.
+11. Preserve existing tests and add new tests.
+12. Keep the v0.5 baseline reproducible.
+
+If Git is available:
+
+- Inspect current branch, status, remotes, and latest commits.
+- Create or use development/v0.6.0 from the verified v0.5 baseline.
+- If the branch already exists, inspect it before using it.
+- Never overwrite an existing branch.
+- Keep all v0.6 changes isolated from the release baseline.
+
+If Git is unavailable:
+
+- Work only in the supplied workspace.
+- Maintain a precise change manifest.
+- Identify every modified, added, and removed file.
+- Never claim that repository changes were published.
+- Provide a safe local Git integration procedure.
+
+---
+
+# 2. NON-NEGOTIABLE PRODUCT DECISIONS
+
+These decisions are final and must not be silently changed.
+
+| Decision | Required choice |
+|---|---|
+| Architecture strategy | General-first |
+| Reference system | Hydrogen |
+| Relativistic model | Dirac |
+| Delivery scope | Full defined v0.6 scope |
+| Product direction | Integrated scientific laboratory |
+| Development strategy | Incremental evolution |
+| Existing v0.5 functionality | Preserve |
+| Primary physics scope | Atomic-scale physics |
+
+The project is not a general-purpose physics simulator.
+
+Do not introduce unrelated physics modules, molecular simulation, plasma simulation, hardware instrumentation, social features, backend services, or unrelated product functionality.
+
+---
+
+# 3. SCIENTIFIC SCOPE
+
+ATOMS v0.6 must deliver the following integrated capabilities.
+
+## 3.1 General atomic-system domain
+
+Support the representation of:
+
+- Neutral atoms.
+- Positive ions.
+- Negative ions.
+- Atomic number Z.
+- Electron count N.
+- Net charge q.
+- Isotopic mass.
+- Nuclear mass.
+- Nuclear charge model.
+- Atomic and ionic configurations.
+- Quantum states.
+- Physics-provider compatibility.
+
+The charge relation is:
+
+q = Z - N
+
+Do not impose N <= Z as a universal physical restriction. Negative ions must be representable. Whether a particular configuration is supported or physically bound must be assessed by the selected model.
+
+A system definition must be independent of any particular solver.
+
+## 3.2 Quantum-state domain
+
+Support clear and distinct representations of:
+
+- Nonrelativistic spatial states.
+- Spin states.
+- Relativistic states.
+- Bound states.
+- State superpositions where supported.
+- Initial and final states for transitions.
+
+Nonrelativistic quantum numbers:
+
+n >= 1
+
+0 <= l < n
+
+-l <= m_l <= l
+
+m_s = ±1/2
+
+Relativistic quantum numbers must include:
+
+n, kappa, j, m_j
+
+Use a mathematically consistent relationship between kappa, l, and j.
+
+Do not force nonrelativistic and relativistic state representations into one ambiguous structure.
+
+---
+
+# 4. PHYSICS ENGINE ARCHITECTURE
+
+The physics architecture must support multiple independent providers through shared, strongly typed contracts.
+
+The initial providers are:
+
+1. Hydrogen-like Schrödinger–Coulomb.
+2. Hydrogen-like Dirac–Coulomb.
+3. Existing PySCF Hartree–Fock data provider.
+4. Existing Lobato 2026 Dirac–Fock density provider.
+5. Future providers, registered only when their capabilities are implemented.
+
+Do not confuse a tabulated atomic density provider with an orbital solver.
+
+Do not confuse a one-electron Dirac solver with a many-electron Dirac–Fock solver.
+
+## 4.1 Provider contract
+
+Design a strongly typed provider interface supporting:
+
+- Unique identifier.
+- Version.
+- Capability declaration.
+- System compatibility assessment.
+- Input validation.
+- Computation.
+- Cancellation.
+- Progress reporting where appropriate.
+- Structured errors.
+- Scientific metadata.
+- Provenance.
+- Numerical quality information.
+
+Use the existing architecture where appropriate. The following is conceptual, not an instruction to duplicate an existing interface:
+
+```ts
+interface PhysicsProvider<
+  TSystem,
+  TState,
+  TInput,
+  TResult
+> {
+  readonly id: string;
+  readonly version: string;
+  readonly capabilities: ProviderCapability[];
+
+  supports(
+    system: TSystem,
+    state: TState
+  ): SupportAssessment;
+
+  validate(
+    input: TInput
+  ): ValidationResult;
+
+  calculate(
+    input: TInput,
+    context: CalculationContext
+  ): Promise<CalculationResult<TResult>>;
+}
+```
+
+Provider capability declarations must be machine-readable and enforceable.
+
+The UI must never advertise a capability that its provider cannot execute.
+
+## 4.2 Schrödinger–Coulomb provider
+
+Implement an accurate analytical hydrogen-like solver.
+
+Hamiltonian:
+
+H = -(hbar^2 / 2mu) nabla^2 - Z e^2 / (4 pi epsilon_0 r)
+
+Energy:
+
+E_n = -mu Z^2 e^4 / [2 (4 pi epsilon_0)^2 hbar^2 n^2]
+
+Wavefunction:
+
+psi_nlm(r,theta,phi) = R_nl(r) Y_l^m(theta,phi)
+
+Probability density:
+
+rho = |psi|^2
+
+Radial probability distribution:
+
+P_nl(r) = r^2 |R_nl(r)|^2
+
+Implement:
+
+- Bound-state energies.
+- Radial wavefunctions.
+- Angular wavefunctions.
+- Full spatial wavefunctions.
+- Probability densities.
+- Radial probability distributions.
+- Radial nodes.
+- Angular nodes.
+- Normalization.
+- Expectation values.
+- Transition matrix elements.
+- E1 transitions.
+
+Use the reduced mass consistently.
+
+The provider must explicitly document its assumptions, including the Coulomb potential, nuclear mass treatment, and nonrelativistic approximation.
+
+## 4.3 Dirac–Coulomb provider
+
+This is a mandatory v0.6 capability.
+
+Implement the one-electron relativistic Dirac–Coulomb model for hydrogen-like systems.
+
+Dirac Hamiltonian:
+
+H_D = c alpha · p + beta m c^2 + V(r)
+
+For a point nucleus:
+
+V(r) = -Z e^2 / (4 pi epsilon_0 r)
+
+Relativistic spinor:
+
+Psi_nkappam(r) = (1/r) [ P_nkappa(r) Omega_kappam ; i Q_nkappa(r) Omega_-kappam ]
+
+The implementation must include:
+
+- Relativistic bound-state energies.
+- Quantum numbers n, kappa, j, m_j.
+- Large radial component P.
+- Small radial component Q.
+- Spin-angular functions.
+- Probability density.
+- Radial probability distribution.
+- Normalization.
+- Fine-structure splitting.
+- Relevant expectation values.
+- E1 transition matrix elements.
+
+Normalization:
+
+integral_0^infinity (|P(r)|^2 + |Q(r)|^2) dr = 1
+
+Point-Coulomb analytical energy reference:
+
+E_nkappa = m c^2 [
+1 + (Z alpha)^2 /
+(n - |kappa| + sqrt(kappa^2 - (Z alpha)^2))^2
+]^(-1/2)
+
+Use total energy and binding energy as separate quantities.
+
+Clearly document whether energies are expressed relative to the rest-energy reference.
+
+### Dirac implementation requirements
+
+Before implementation:
+
+1. Review authoritative relativistic quantum mechanics references.
+2. Derive or verify the radial equations and boundary conditions.
+3. Determine the numerical method.
+4. Establish a stable normalization procedure.
+5. Establish near-origin and asymptotic behavior.
+6. Define the valid Z and kappa domain.
+7. Build independent reference tests.
+
+Do not implement a visually plausible but mathematically incorrect Dirac solver.
+
+Use analytical Dirac–Coulomb solutions as the principal reference.
+
+If numerical radial integration is required, investigate stable shooting, logarithmic-grid integration, matching methods, or other suitable techniques.
+
+Do not introduce an unnecessary numerical solver if a reliable analytical representation is sufficient for the supported domain.
+
+### Finite nuclear size
+
+Architecturally support both:
+
+- Point nucleus.
+- Finite nuclear charge distribution.
+
+Point-nucleus Dirac–Coulomb is the primary v0.6 reference implementation.
+
+Finite nuclear size must remain unavailable until a physically defined nuclear charge distribution, parameters, solver, and validation tests are implemented.
+
+Do not silently substitute a point nucleus for a requested finite nucleus.
+
+### Relativistic limitations
+
+The base Dirac model does not automatically include:
+
+- Lamb shift.
+- Vacuum polarization.
+- Electron self-energy.
+- Breit interaction.
+- Nuclear recoil beyond the implemented treatment.
+- Hyperfine structure.
+- Nuclear polarization.
+
+Never claim these effects are included unless they are separately implemented and validated.
+
+---
+
+# 5. GENERAL EXPERIMENT PLATFORM
+
+ATOMS v0.6 must include a reusable experiment platform.
+
+The platform must separate:
+
+1. Experiment definition.
+2. Execution.
+3. Result.
+4. Scientific provenance.
+
+Required modules:
+
+- ExperimentRegistry.
+- ExperimentSchema.
+- ExperimentValidator.
+- ExperimentRunner.
+- ExperimentScheduler.
+- ExperimentStore.
+- ExperimentSerializer.
+- ResultRegistry.
+
+Every experiment must be independent of the UI.
+
+A UI component must not directly implement physics calculations.
+
+## 5.1 Experiment lifecycle
+
+Supported execution states:
+
+- queued
+- running
+- completed
+- failed
+- cancelled
+- unsupported
+- timed-out
+
+Support:
+
+- Validation before execution.
+- Worker-based execution.
+- Cancellation.
+- Progress reporting when meaningful.
+- Structured errors.
+- Result metadata.
+- Result persistence.
+- Reproducible experiment definitions.
+
+## 5.2 Experiment serialization
+
+Use a versioned schema.
+
+A saved experiment must preserve:
+
+- Atomic system.
+- Isotope and nuclear model.
+- Physics provider.
+- Provider version.
+- Quantum states.
+- Model parameters.
+- Numerical parameters.
+- Requested observables.
+- Constants version.
+- Data provenance.
+- Execution metadata.
+
+Distinguish retrieving an old result from recomputing it.
+
+A reproducibility claim is valid only when the relevant model, data, constants, and numerical settings are preserved.
+
+Use IndexedDB for local persistence unless the existing project provides a better compatible solution.
+
+Provide JSON import and export.
+
+---
+
+# 6. TRANSITIONS AND SPECTROSCOPY
+
+Full v0.6 delivery includes electric-dipole transitions for the supported hydrogen-like models.
+
+## 6.1 Nonrelativistic E1
+
+Dipole matrix element:
+
+d_fi = <psi_f | -e r | psi_i>
+
+Selection rules:
+
+Delta l = ±1
+
+Delta m_l = 0, ±1
+
+Electric-dipole transitions do not change spin in the standard nonrelativistic approximation.
+
+Implement:
+
+- Initial and final state selection.
+- Selection-rule evaluation.
+- Radial matrix elements.
+- Angular matrix elements.
+- Full dipole matrix elements.
+- Transition energies.
+- Wavelengths.
+- Frequencies.
+- Oscillator strengths.
+- Einstein A coefficients where the relevant conventions and degeneracy factors are correctly implemented.
+
+## 6.2 Relativistic E1
+
+Use Dirac spinors.
+
+Implement the electric-dipole matrix element with the appropriate relativistic angular algebra.
+
+Support:
+
+- Relativistic initial and final states.
+- Angular coefficients.
+- Radial integrals.
+- Polarization components.
+- Selection-rule evaluation.
+- Transition wavelengths.
+- Oscillator strengths.
+- Einstein A coefficients.
+
+Relevant selection rules include:
+
+Delta j = 0, ±1
+
+j = 0 to j = 0 is forbidden.
+
+Parity must change for E1 transitions.
+
+Do not rely only on simplified selection rules when the actual matrix element can be evaluated.
+
+The transition engine must report:
+
+- Initial state.
+- Final state.
+- Model.
+- Operator.
+- Angular contribution.
+- Radial contribution.
+- Total matrix element.
+- Polarization.
+- Selection-rule result.
+- Transition energy.
+- Wavelength.
+- Oscillator strength.
+- Transition rate.
+- Numerical quality.
+
+## 6.3 Spectroscopy
+
+Build spectra from calculated transition results, not hard-coded lines.
+
+Required:
+
+- Emission spectrum.
+- Absorption spectrum.
+- Lyman series.
+- Balmer series.
+- Paschen series.
+- User-selected wavelength ranges.
+- Model comparison.
+- NIST reference comparison.
+- Ideal discrete lines.
+
+Do not claim realistic observed intensities without modeling state populations and relevant experimental conditions.
+
+Do not implement natural, Doppler, or collisional broadening as physically complete features without the required models and parameters.
+
+---
+
+# 7. SCIENTIFIC VISUALIZATION
+
+Extend the existing Three.js visualization architecture.
+
+Do not replace the renderer without a verified technical reason.
+
+Support three distinct visualization types:
+
+1. Wavefunction.
+2. Probability density.
+3. Radial probability.
+
+For Schrödinger states:
+
+- 3D probability-density isosurfaces.
+- Positive and negative wavefunction phase.
+- 2D XY, XZ, and YZ slices.
+- Radial plots.
+- Angular structure.
+- Node visualization.
+
+For Dirac states:
+
+- Large radial component.
+- Small radial component.
+- Total spinor probability density.
+- Radial probability.
+- Relevant spin-angular structure.
+
+The large and small components must not be presented as independent orbitals.
+
+Visual color is a mathematical representation, not a physical color of an electron.
+
+Requirements:
+
+- Interactive camera.
+- Zoom and rotation.
+- Adjustable isovalue.
+- Resolution controls.
+- Color-scale controls.
+- Numerical visualization metadata.
+- Clear distinction between exact values and sampled rendering.
+
+Rendering must not block the main thread with expensive calculations.
+
+Separate numerical computation from rendering.
+
+---
+
+# 8. UNITS, CONSTANTS, AND SCIENTIFIC QUALITY
+
+Implement a centralized unit and constants system.
+
+Use atomic units internally where appropriate, but preserve explicit conversions.
+
+Required units include:
+
+- Hartree.
+- Electronvolt.
+- Bohr radius.
+- Meter.
+- Angstrom.
+- Nanometer.
+- Second.
+- Hertz.
+- Coulomb.
+- Atomic mass units.
+
+Use a pinned CODATA version.
+
+Store the constants version with every experiment.
+
+Do not use untyped numbers where the unit is ambiguous.
+
+Separate:
+
+- Numerical error.
+- Physical uncertainty.
+- Model approximation.
+- Reference-data uncertainty.
+
+A result must be accompanied by:
+
+- Units.
+- Method.
+- Model.
+- Assumptions.
+- Numerical settings.
+- Provenance.
+- Validation status.
+
+Never represent a model approximation as an exact physical result.
+
+---
+
+# 9. DATA AND EXISTING PROVIDERS
+
+Preserve existing v0.5 data and providers.
+
+Inspect and reuse, where appropriate:
+
+- Existing 118-element records.
+- Existing NIST-derived data.
+- Existing Lobato 2026 total-density data.
+- Existing PySCF Hartree–Fock data.
+- Existing provider registry.
+- Existing coverage matrix.
+- Existing native C++ reference core.
+
+Do not duplicate datasets or calculations unnecessarily.
+
+Do not silently change scientific provenance.
+
+Keep the distinction between:
+
+- Total spherical atomic density.
+- Subshell density.
+- Individual orbital.
+- Radial wavefunction.
+- Three-dimensional wavefunction.
+- Experimental energy levels.
+- Calculated energy levels.
+
+A total spherical density cannot reconstruct all individual orbital angular structures.
+
+The existing Lobato density provider must not be treated as an orbital-resolved Dirac solver.
+
+The existing PySCF data must not be represented as universal all-element Hartree–Fock calculations.
+
+Use NIST Atomic Spectra Database and CODATA as important reference sources where relevant.
+
+Verify exact datasets, versions, licenses, and source files before importing or redistributing data.
+
+---
+
+# 10. USER INTERFACE
+
+Build an integrated environment named:
+
+ATOMS Laboratory
+
+Required workspaces:
+
+1. Workbench.
+2. Atomic Systems.
+3. Quantum States.
+4. Energy Structure.
+5. Transitions.
+6. Spectroscopy.
+7. Analysis.
+8. Experiment History.
+
+These are integrated views of one application, not independent applications.
+
+The user must be able to:
+
+1. Select an atom or ion.
+2. Define isotope and nuclear model where supported.
+3. Select a physics provider.
+4. Define quantum states.
+5. Run calculations.
+6. Visualize results.
+7. Inspect numerical outputs.
+8. Compare models.
+9. Compare reference data.
+10. Save and reload experiments.
+
+The interface must expose unsupported capabilities honestly.
+
+Disable unavailable controls instead of producing fabricated results.
+
+Show the model, approximation, units, and validation status next to scientific outputs.
+
+Preserve the existing design language where practical. Improve usability without introducing unnecessary visual complexity.
+
+---
+
+# 11. REQUIRED MODULE ARCHITECTURE
+
+Evolve the current codebase toward a modular structure similar to:
+
+src/
+  app/
+  domain/
+    atomic/
+    quantum/
+    observables/
+    transitions/
+  experiments/
+    registry/
+    schema/
+    validation/
+    execution/
+    persistence/
+    results/
+  physics/
+    providers/
+      schrodinger/
+      dirac/
+      hartreeFock/
+      diracFock/
+    hamiltonians/
+    operators/
+    transitions/
+    spectroscopy/
+    constants/
+  numerics/
+    integration/
+    interpolation/
+    quadrature/
+    eigenvalue/
+    specialFunctions/
+    linearAlgebra/
+  rendering/
+    orbitals/
+    density/
+    isosurfaces/
+    scenes/
+  data/
+    references/
+    providers/
+    provenance/
+  workers/
+  components/
+    laboratory/
+    quantum/
+    spectroscopy/
+    analysis/
+    shared/
+
+This is a target architecture, not a command to move every existing file immediately.
+
+Before restructuring:
+
+1. Inspect the existing dependency graph.
+2. Identify stable modules.
+3. Identify circular dependencies.
+4. Identify existing reusable numerical functions.
+5. Propose a minimal migration.
+6. Execute changes incrementally.
+7. Preserve imports and public APIs where practical.
+8. Run regression tests after each migration.
+
+---
+
+# 12. NUMERICAL EXECUTION AND PERFORMANCE
+
+Use Web Workers for expensive calculations.
+
+The main UI thread must remain responsive.
+
+Required:
+
+- Worker-based execution.
+- Structured-clone-safe input and output.
+- Cancellation.
+- Error propagation.
+- Progress reporting where useful.
+- Memory management.
+- Caching of reusable results.
+- No stale result rendering.
+- No unnecessary duplicate computation.
+
+Do not assume WebGPU is available.
+
+Preserve a reliable WebGL fallback.
+
+If native C++ acceleration is used, document the compilation and integration requirements.
+
+Do not introduce WASM merely for architectural appearance.
+
+Benchmark:
+
+- State evaluation.
+- Density sampling.
+- Radial integration.
+- Transition matrix elements.
+- Isosurface generation.
+- Large visualization workloads.
+
+Clearly distinguish software rendering benchmarks from hardware GPU measurements.
+
+---
+
+# 13. TESTING AND SCIENTIFIC VALIDATION
+
+Testing is mandatory.
+
+A feature is not complete because it compiles or looks correct.
+
+## 13.1 Schrödinger tests
+
+Test:
+
+- Analytical energies for multiple n and Z.
+- Wavefunction normalization.
+- Radial normalization.
+- Radial node counts.
+- Angular symmetry.
+- Known expectation values.
+- Reduced-mass treatment.
+- Hydrogen-like ion scaling.
+- E1 selection rules.
+- Known matrix elements.
+
+Example expectation value:
+
+<r>_nl = a_mu / (2 Z) [3 n^2 - l(l+1)]
+
+## 13.2 Dirac tests
+
+Test:
+
+- Analytical Dirac–Coulomb energies.
+- Large/small radial normalization.
+- Quantum-number relationships.
+- Fine-structure splitting.
+- Nonrelativistic limit as alpha approaches zero.
+- Validity-domain enforcement.
+- Boundary behavior.
+- Numerical stability.
+- Agreement with independent references.
+
+The point-Coulomb solution must enforce its mathematical validity domain.
+
+Do not silently extend it to invalid parameter combinations.
+
+## 13.3 Transition tests
+
+Test:
+
+- Angular selection rules.
+- Parity.
+- Radial matrix elements.
+- Polarization components.
+- Total matrix elements.
+- Positive transition rates.
+- Energy-wavelength consistency.
+- Selected reference transitions.
+- Nonrelativistic and relativistic limits.
+
+## 13.4 Integration tests
+
+Test:
+
+- Provider selection.
+- Unsupported system handling.
+- Experiment lifecycle.
+- Cancellation.
+- Persistence.
+- JSON serialization.
+- Reproducibility.
+- UI updates.
+- Worker failures.
+- Stale result protection.
+
+## 13.5 Regression tests
+
+Run the existing v0.5 suite before and after changes.
+
+Do not delete, weaken, or rewrite tests merely to make the build pass.
+
+If an existing test must change because the specification legitimately changed, document the scientific and engineering reason.
+
+Record exact test counts and actual command outputs.
+
+Never invent successful test results.
+
+---
+
+# 14. DOCUMENTATION DELIVERABLES
+
+Create or update the following documents:
+
+- ARCHITECTURE.md
+- PHYSICS_MODELS.md
+- QUANTUM_STATES.md
+- SCHRODINGER_ENGINE.md
+- DIRAC_ENGINE.md
+- TRANSITIONS.md
+- SPECTROSCOPY.md
+- UNITS_AND_CONSTANTS.md
+- DATA_PROVENANCE.md
+- VALIDATION.md
+- API_REFERENCE.md
+- USER_GUIDE.md
+- DEVELOPER_GUIDE.md
+- CHANGELOG.md
+- RELEASE_NOTES.md
+
+Every scientific model document must include:
+
+- Governing equations.
+- Definitions.
+- Units.
+- Assumptions.
+- Numerical method.
+- Validity domain.
+- Known limitations.
+- Reference sources.
+- Validation procedures.
+
+Documentation must describe implemented functionality, not planned functionality as if it already existed.
+
+---
+
+# 15. IMPLEMENTATION ROADMAP
+
+Follow these phases in order.
+
+Do not skip a phase.
+
+Do not silently mark a phase complete.
+
+## PHASE 0 — Repository Audit and Architecture Freeze
+
+Tasks:
+
+- Inspect repository and Git state.
+- Read README and all existing technical documentation.
+- Inspect current physics providers.
+- Inspect current state management.
+- Inspect numerical and rendering modules.
+- Inspect all tests.
+- Run baseline verification where the environment allows it.
+- Record missing dependencies and unavailable tools.
+- Map existing features to the v0.6 specification.
+- Identify risks and migration boundaries.
+
+Deliverables:
+
+- REPOSITORY_AUDIT.md
+- ARCHITECTURE.md
+- ARCHITECTURE_DECISIONS.md
+- MIGRATION_PLAN.md
+- BASELINE_VERIFICATION.md
+
+Do not begin large-scale implementation before completing this phase.
+
+## PHASE 1 — General Atomic Domain
+
+Implement:
+
+- AtomicSystem.
+- AtomicSpecies.
+- NuclearModel.
+- QuantumState.
+- Nonrelativistic quantum numbers.
+- Relativistic quantum numbers.
+- Unit system.
+- Constants registry.
+- Provider capability contracts.
+- Provider registry.
+- Validation framework.
+
+Acceptance:
+
+The domain layer must be independently testable and must not depend on React or Three.js.
+
+## PHASE 2 — Experiment Platform
+
+Implement:
+
+- Experiment schema.
+- Registry.
+- Validation.
+- Runner.
+- Scheduler.
+- Worker communication.
+- Cancellation.
+- Progress.
+- Result normalization.
+- IndexedDB persistence.
+- JSON serialization.
+
+Acceptance:
+
+A real hydrogen calculation must execute, produce a structured result, save, reload, and rerun.
+
+## PHASE 3 — Schrödinger Engine
+
+Implement the analytical hydrogen-like provider.
+
+Acceptance:
+
+- Analytical energy tests pass.
+- Normalization tests pass.
+- Radial functions are validated.
+- Expectation values are validated.
+- Hydrogen and supported hydrogen-like ions work.
+
+## PHASE 4 — Dirac Engine
+
+Implement the relativistic hydrogen-like provider.
+
+Acceptance:
+
+- Analytical Dirac energy tests pass.
+- Quantum-number relationships are correct.
+- Spinor normalization passes.
+- Fine structure is demonstrated.
+- Nonrelativistic limit is tested.
+- Invalid domains are rejected.
+
+## PHASE 5 — Quantum Visualization
+
+Implement:
+
+- Wavefunction rendering.
+- Probability-density rendering.
+- Radial plots.
+- Phase visualization.
+- 2D slices.
+- Dirac large/small component views.
+- Isosurface controls.
+
+Acceptance:
+
+Visual outputs must be generated from actual provider results and must be numerically consistent with them.
+
+## PHASE 6 — E1 Transitions and Spectroscopy
+
+Implement:
+
+- Nonrelativistic E1.
+- Relativistic E1.
+- Selection rules.
+- Matrix elements.
+- Oscillator strengths.
+- Einstein A coefficients.
+- Spectral series.
+- NIST comparisons.
+
+Acceptance:
+
+Reference transitions must pass independent numerical tests.
+
+## PHASE 7 — Integration and Release
+
+Implement:
+
+- Full integration.
+- Regression tests.
+- Browser tests.
+- Performance tests.
+- Scientific validation.
+- Documentation.
+- Release packaging.
+
+Acceptance:
+
+All mandatory release criteria must pass.
+
+---
+
+# 16. RELEASE ACCEPTANCE CRITERIA
+
+ATOMS v0.6.0 cannot be declared complete until all mandatory requirements below are satisfied.
+
+1. General atomic and ionic domain is implemented.
+2. Quantum-state representations are correct and typed.
+3. Provider architecture is operational.
+4. Experiment platform works independently of UI.
+5. Experiments can be saved, loaded, exported, and rerun.
+6. Schrödinger hydrogen-like calculations are validated.
+7. Dirac hydrogen-like calculations are validated.
+8. Wavefunctions and probability densities are visualized correctly.
+9. Energy structure is displayed correctly.
+10. Nonrelativistic E1 transitions work.
+11. Relativistic E1 transitions work.
+12. Spectra are generated from actual transition calculations.
+13. Selected reference results are validated.
+14. v0.5 regression functionality is preserved.
+15. Documentation is complete and accurate.
+16. No unsupported scientific capabilities are advertised as implemented.
+
+If any mandatory item is incomplete, report the release as incomplete.
+
+Do not lower acceptance criteria to obtain a passing status.
+
+---
+
+# 17. STRICT DEVELOPMENT RULES
+
+You must work as an engineering agent, not as a code generator that optimizes for the number of edited files.
+
+For every implementation task:
+
+1. Explain the objective.
+2. Inspect the relevant existing implementation.
+3. Identify dependencies.
+4. Propose the smallest safe change.
+5. Implement it.
+6. Run relevant tests.
+7. Inspect the resulting diff.
+8. Update documentation.
+9. Report actual results.
+10. Identify remaining limitations.
+
+Never:
+
+- Generate placeholder physics.
+- Hard-code results while presenting them as calculations.
+- Fabricate reference data.
+- Use unverified equations.
+- Hide unsupported features.
+- Replace existing components without reason.
+- Introduce unnecessary dependencies.
+- Duplicate existing data.
+- Disable tests to achieve a green build.
+- Claim validation based only on visual inspection.
+- Claim all 118 elements are supported by a one-electron solver.
+- Treat total density as individual orbitals.
+- Claim Dirac–Fock when only one-electron Dirac is implemented.
+
+If scientific uncertainty arises:
+
+- Stop the affected implementation.
+- Research the underlying physics.
+- Identify authoritative references.
+- Document the uncertainty.
+- Propose a defensible approach.
+- Do not guess.
+
+If the workspace cannot execute a test because a dependency or system tool is missing, report the exact limitation. Do not invent a successful execution.
+
+---
+
+# 18. EXECUTION PROTOCOL — START NOW
+
+Begin with PHASE 0 only.
+
+Do not immediately implement the entire project.
+
+Your first response must contain:
+
+1. Repository identity and current Git status.
+2. Actual repository structure.
+3. Existing physics architecture.
+4. Existing scientific datasets and their limitations.
+5. Existing test infrastructure and baseline results.
+6. Existing capabilities that must be preserved.
+7. Architectural gaps relative to this specification.
+8. Scientific and numerical risks.
+9. A minimal migration plan.
+10. A phase-by-phase implementation plan adapted to the actual codebase.
+
+Then create or update the Phase 0 documentation deliverables.
+
+Do not modify production physics modules during Phase 0 unless a minimal change is strictly necessary to make the audit possible.
+
+After Phase 0, stop and present a detailed review.
+
+Wait for explicit authorization before Phase 1.
+
+For all subsequent phases:
+
+- Work incrementally.
+- Complete one phase at a time.
+- Report exact files changed.
+- Report actual tests executed.
+- Report scientific validation results.
+- Report unresolved issues.
+- Wait for approval before beginning the next major phase.
+
+If the platform requires an initial instruction before processing this document, use this exact principle:
+
+**Follow this specification, preserve the existing project, and do not stop until the currently authorized phase has been completed and independently verified.**
+
+---
+
+# FINAL OBJECTIVE
+
+Deliver a scientifically honest, extensible, maintainable, and reproducible ATOMS v0.6.0.
+
+The result must be more than a visually impressive atomic simulator.
+
+It must be a genuine computational atomic-physics laboratory in which:
+
+- Atomic systems are explicitly defined.
+- Quantum states are mathematically represented.
+- Physics providers perform real calculations.
+- Relativistic and nonrelativistic models are distinguished.
+- Transitions are calculated from matrix elements.
+- Spectra are generated from calculated transitions.
+- Numerical outputs can be inspected.
+- Experiments can be reproduced.
+- Scientific limitations are transparent.
+- Existing v0.5 capabilities remain preserved.
+
+**Scientific correctness takes priority over feature count, visual appearance, and implementation speed.**
