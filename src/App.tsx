@@ -3,10 +3,11 @@ import { cn } from "@/utils/cn";
 import { ControlRail } from "@/components/ControlRail";
 import { EnergyDiagram } from "@/components/EnergyDiagram";
 import { Inspector } from "@/components/Inspector";
-import { RadialPlot } from "@/components/RadialPlot";
+import { RadialPlot, type TotalRadialDensityView } from "@/components/RadialPlot";
 import { TelemetryBar } from "@/components/TelemetryBar";
 import { Panel } from "@/components/ui";
 import { elementByZ } from "@/data/elements";
+import { diracFockRadialGrid } from "@/physics/diracFock";
 import { BOHR_PM, radialExtent } from "@/physics/hydrogenic";
 import { effectiveZ } from "@/physics/models";
 import { hfDatasetFor, selectProvider } from "@/science/providers";
@@ -47,10 +48,39 @@ export default function App() {
 
   const layerColors = useMemo(() => Object.fromEntries(element.subshells.map((s, i) => [s.label, LAYER_PALETTE[i % LAYER_PALETTE.length]])), [element]);
   const hfDataset = useMemo(() => hfDatasetFor(state.Z), [state.Z]);
+  const dfGrid = useMemo(() => diracFockRadialGrid(state.Z), [state.Z]);
+  const useDF = state.mode === "atom" && state.densitySource === "dirac-fock";
   const useHF = state.mode === "atom" && state.densitySource === "hf" && hfDataset !== null;
+  const isTotalDensityOnly = useDF || useHF;
   const providerSelection = useMemo(() => selectProvider({ Z: state.Z, observable: "electron-density", accuracy: "quantitative" }), [state.Z]);
   const peaks = useRef(new Map<string, number>());
   const electronTotals = useRef(new Map<string, number>());
+
+  const totalRadialView: TotalRadialDensityView | null = useMemo(() => {
+    if (useDF) {
+      return {
+        label: `Lobato 2026 Dirac–Fock (${element.symbol})`,
+        rBohr: dfGrid.rBohr,
+        rhoElectronPerBohr3: dfGrid.rhoElectronPerBohr3,
+        integratedElectrons: dfGrid.integratedElectrons,
+        expectedElectrons: element.Z,
+        limitationsNote:
+          "Relativistic B-spline Dirac–Fock (atomx, finite nucleus, spherical average over open-shell occupations; exact Dirac 1s for H). Total spherical density only; individual subshell R_nl(r) orbitals are not resolved.",
+      };
+    }
+    if (useHF && hfDataset) {
+      return {
+        label: `PySCF ${hfDataset.method}/${hfDataset.basis} (${element.symbol})`,
+        rBohr: hfDataset.density.rBohr,
+        rhoElectronPerBohr3: hfDataset.density.rhoElectronPerBohr3,
+        integratedElectrons: hfDataset.density.integratedElectrons,
+        expectedElectrons: hfDataset.atom.Z,
+        limitationsNote:
+          "Non-relativistic basis-limited RHF/ROHF spherically averaged total density (no correlation). Individual subshell R_nl(r) orbitals are not exported.",
+      };
+    }
+    return null;
+  }, [useDF, useHF, dfGrid, hfDataset, element.symbol, element.Z]);
 
   // ---- layer specification derived from state ----
   const specs: LayerSpec[] = useMemo(() => {
@@ -59,6 +89,19 @@ export default function App() {
         key: "single",
         params: { n: state.n, l: state.l, m: state.m, zeff: effectiveZ(state.model, element, sub), basis: state.basis, count: state.count, seed: state.seed, modelId: state.model, mix: "single" },
         color: layerColors[sub.label] ?? "#f59e0b",
+        visible: true,
+        opacity: 1,
+      }];
+    }
+    if (useDF) {
+      return [{
+        key: "df-total",
+        params: {
+          n: 1, l: 0, m: 0, zeff: element.Z, basis: "complex" as const, count: state.count, seed: state.seed,
+          modelId: "lobato2026-df", mix: "tabulated-df" as const,
+          tabulated: { id: `df:${element.Z}:${element.symbol}:${dfGrid.rBohr.length}`, r: dfGrid.rBohr, rho: dfGrid.rhoElectronPerBohr3, expectedElectrons: element.Z },
+        },
+        color: "#7dd3fc",
         visible: true,
         opacity: 1,
       }];
@@ -87,12 +130,30 @@ export default function App() {
         opacity: ui.opacity,
       };
     });
-  }, [state.mode, state.n, state.l, state.m, state.model, state.basis, state.count, state.seed, state.layers, element, sub, layerColors, useHF, hfDataset]);
+  }, [state.mode, state.n, state.l, state.m, state.model, state.basis, state.count, state.seed, state.layers, element, sub, layerColors, useDF, useHF, dfGrid, hfDataset]);
 
   const extentPm = useMemo(() => {
-    if (useHF && hfDataset) return hfDataset.density.rBohr[hfDataset.density.rBohr.length - 1] * BOHR_PM;
+    if (useDF) {
+      // Visual framing covering 99.9% of total density extent (capped sensibly)
+      return Math.min(dfGrid.rMaxBohr, 18) * BOHR_PM;
+    }
+    if (useHF && hfDataset) return Math.min(hfDataset.density.rBohr[hfDataset.density.rBohr.length - 1], 18) * BOHR_PM;
     return Math.max(...specs.map((s) => radialExtent(s.params.n, s.params.l, s.params.zeff))) * BOHR_PM;
-  }, [specs, useHF, hfDataset]);
+  }, [specs, useDF, useHF, dfGrid, hfDataset]);
+
+  // Effective render settings enforcing honest colorMode boundaries
+  const effectiveRender = useMemo(() => {
+    if (isTotalDensityOnly && state.render.colorMode !== "density") {
+      return { ...state.render, colorMode: "density" as const };
+    }
+    if (state.mode === "atom" && (state.render.colorMode === "phase-real" || state.render.colorMode === "phase-complex")) {
+      return { ...state.render, colorMode: "density" as const };
+    }
+    if (state.mode === "single" && state.render.colorMode === "layer") {
+      return { ...state.render, colorMode: "density" as const };
+    }
+    return state.render;
+  }, [state.render, state.mode, isTotalDensityOnly]);
 
   // ---- scene lifecycle ----
   useEffect(() => {
@@ -100,7 +161,7 @@ export default function App() {
     if (!canvas) return;
     let scene: OrbitalScene;
     try {
-      scene = new OrbitalScene(canvas, state.render);
+      scene = new OrbitalScene(canvas, effectiveRender);
     } catch (e) {
       setGlError(e instanceof Error ? e.message : String(e));
       return;
@@ -129,11 +190,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    sceneRef.current?.applySettings(state.render);
-  }, [state.render]);
+    sceneRef.current?.applySettings(effectiveRender);
+  }, [effectiveRender]);
 
-  // frame camera when element or mode changes
-  const frameKey = `${state.Z}|${state.mode}|${state.model}`;
+  // frame camera when element, mode, or density source changes
+  const frameKey = `${state.Z}|${state.mode}|${state.model}|${state.densitySource}`;
   useEffect(() => {
     sceneRef.current?.setExtent(extentPm);
     sceneRef.current?.frame(extentPm);
@@ -156,16 +217,26 @@ export default function App() {
     const keep = new Set(specs.map((s) => s.key));
     scene.removeLayersExcept(keep);
     client.cancelAllExcept(keep);
-    for (const k of [...lastParams.current.keys()]) if (!keep.has(k)) lastParams.current.delete(k);
-    scene.setSharedMax(null);
-    peaks.current.clear();
-    electronTotals.current.clear();
-    setElectrons(null);
+    for (const k of [...lastParams.current.keys()]) {
+      if (!keep.has(k)) {
+        lastParams.current.delete(k);
+        peaks.current.delete(k);
+        electronTotals.current.delete(k);
+      }
+    }
+    if (state.mode === "atom" && peaks.current.size > 0) {
+      scene.setSharedMax(Math.max(...peaks.current.values()));
+    } else if (state.mode === "single") {
+      scene.setSharedMax(null);
+    }
+
     for (const spec of specs) {
       const sig = JSON.stringify(spec.params);
       scene.setLayerState(spec.key, spec.opacity, spec.visible);
       if (lastParams.current.get(spec.key) === sig) continue;
       lastParams.current.set(spec.key, sig);
+      peaks.current.delete(spec.key);
+      electronTotals.current.delete(spec.key);
       setProgress(0);
       client.request(spec.key, spec.params, {
         onProgress: (f) => setProgress(f),
@@ -175,10 +246,11 @@ export default function App() {
           setWorkerError(null);
           scene.setLayer(spec.key, { positionsBohr: res.positions, density: res.density, phase: res.phase, maxDensity: res.maxDensity, color: spec.color }, spec.opacity, spec.visible);
           if (state.mode === "atom") {
-            // Absolute peaks (occupancy-weighted) → shared brightness normalisation.
             peaks.current.set(spec.key, res.maxDensity);
             scene.setSharedMax(Math.max(...peaks.current.values()));
-          } else scene.setSharedMax(null);
+          } else {
+            scene.setSharedMax(null);
+          }
           electronTotals.current.set(spec.key, res.electrons);
           if (state.mode === "atom") setElectrons([...electronTotals.current.values()].reduce((a, b) => a + b, 0));
           else setElectrons(res.electrons);
@@ -186,6 +258,9 @@ export default function App() {
         },
         onError: (msg) => setWorkerError(msg),
       });
+    }
+    if (state.mode === "atom" && electronTotals.current.size === specs.length) {
+      setElectrons([...electronTotals.current.values()].reduce((a, b) => a + b, 0));
     }
   }, [specs, state.mode]);
 
@@ -215,10 +290,32 @@ export default function App() {
 
   const zeffActive = effectiveZ(state.model, element, sub);
   const currentNote = state.showCurrent && (state.basis !== "complex" || state.m === 0 || state.mode === "atom");
+  const densityLabel = useDF
+    ? "Dirac–Fock (Lobato 2026)"
+    : useHF
+      ? "PySCF HF (bundled)"
+      : state.model === "hydrogenic-exact"
+        ? "exact hydrogenic"
+        : "Slater estimate";
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-black text-zinc-200" style={{ fontFamily: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif" }}>
-      <TelemetryBar element={element} sub={sub} m={state.m} model={state.model} mode={state.mode} densitySource={useHF ? "PySCF HF (bundled)" : state.model === "hydrogenic-exact" ? "exact hydrogenic" : "Slater estimate"} electrons={electrons} samples={specs.reduce((a, s) => a + (s.visible ? s.params.count : 0), 0)} stats={stats} sampleMs={sampleMs} progress={progress} workerError={workerError} />
+      <TelemetryBar
+        element={element}
+        sub={sub}
+        m={state.m}
+        model={state.model}
+        mode={state.mode}
+        densitySource={densityLabel}
+        isTotalDensityOnly={isTotalDensityOnly}
+        totalMeanRadiusPm={useDF ? dfGrid.meanRadiusBohr * BOHR_PM : null}
+        electrons={electrons}
+        samples={specs.reduce((a, s) => a + (s.visible ? s.params.count : 0), 0)}
+        stats={stats}
+        sampleMs={sampleMs}
+        progress={progress}
+        workerError={workerError}
+      />
       <div className="flex min-h-0 flex-1">
         <aside className={cn("w-[340px] shrink-0 border-r border-zinc-800 bg-zinc-950 lg:block", mobilePanel === "controls" ? "fixed inset-y-12 left-0 z-20 block w-[88vw] max-w-[340px]" : "hidden")}>
           <ControlRail state={state} element={element} dispatch={dispatch} extentPm={extentPm} layerColors={layerColors} onResetCamera={resetCamera} />
@@ -241,14 +338,15 @@ export default function App() {
           )}
           <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1 text-[10px] text-zinc-400">
             <ScaleBar extentPm={extentPm} />
-            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom</span>
-            {state.render.colorMode === "phase-real" && <span><span className="text-orange-400">■ ψ &gt; 0</span> <span className="text-blue-400">■ ψ &lt; 0</span> — sign of the real wavefunction (not density)</span>}
-            {state.render.colorMode === "phase-complex" && <span>hue = arg ψ ∈ (−π, π] — complex phase e<sup>imφ</sup>; brightness ∝ log|ψ|²</span>}
-            {state.render.colorMode === "density" && <span>colour/brightness ∝ log-relative |ψ|² (black→violet→red→yellow→white)</span>}
-            {state.mode === "atom" && !useHF && <span>independent-electron density ρ = Σ Nᵢ|Rᵢ|²/(4π) (configuration-average, Unsöld). Brightness uses a <b>shared</b> cross-subshell normalisation; point count ∝ occupancy. Not a correlated many-electron density.</span>}
-            {state.mode === "atom" && useHF && <span className="text-sky-300">imported PySCF {hfDataset?.method}/{hfDataset?.basis} spherically averaged HF density (basis-set-limited, non-relativistic). Not experimental.</span>}
+            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.5.0</span>
+            {effectiveRender.colorMode === "phase-real" && <span><span className="text-orange-400">■ ψ &gt; 0</span> <span className="text-blue-400">■ ψ &lt; 0</span> — sign of the real wavefunction (not density)</span>}
+            {effectiveRender.colorMode === "phase-complex" && <span>hue = arg ψ ∈ (−π, π] — complex phase e<sup>imφ</sup>; brightness ∝ log|ψ|²</span>}
+            {effectiveRender.colorMode === "density" && <span>colour/brightness ∝ log-relative density (black→violet→red→yellow→white)</span>}
+            {state.mode === "atom" && !isTotalDensityOnly && <span>independent-electron density ρ = Σ Nᵢ|Rᵢ|²/(4π) (configuration-average, Unsöld). Brightness uses a <b>shared</b> cross-subshell normalisation; point count ∝ occupancy. Not a correlated many-electron density.</span>}
+            {useDF && <span className="text-sky-300">Lobato et al. (2026) relativistic B-spline Dirac–Fock total spherical density (finite nucleus, spherical average). Subshell orbitals &amp; phase are not resolved.</span>}
+            {useHF && <span className="text-sky-300">imported PySCF {hfDataset?.method}/{hfDataset?.basis} spherically averaged HF density (basis-set-limited, non-relativistic). Not experimental.</span>}
             {state.mode === "atom" && electrons !== null && <span>∫ρ dV = {electrons.toFixed(3)} e (occupancy/tabulated check)</span>}
-            {currentNote && <span className="text-amber-300">j = (ħ/m) Im(ψ*∇ψ) vanishes identically for real stationary orbitals and m = 0; select complex basis with m ≠ 0.</span>}
+            {currentNote && <span className="text-amber-300">j = (ħ/m) Im(ψ*∇ψ) vanishes identically for real stationary orbitals, m = 0, and total-density views; select single-orbital complex basis with m ≠ 0.</span>}
             {state.showCurrent && !currentNote && <span className="text-emerald-300">green segments: probability-current density j ∝ m|ψ|²/(r sinθ) φ̂ (azimuthal circulation about z)</span>}
           </div>
         </main>
@@ -262,13 +360,13 @@ export default function App() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {tab === "radial" && (
-              <Panel title="Radial probability distribution">
-                <RadialPlot n={state.n} l={state.l} zeff={zeffActive} model={state.model} />
+              <Panel title={totalRadialView ? "Total radial density 4πr²ρ(r)" : "Radial probability distribution"}>
+                <RadialPlot mode={state.mode} n={state.n} l={state.l} zeff={zeffActive} model={state.model} totalDensity={totalRadialView} />
               </Panel>
             )}
             {tab === "energy" && (
               <Panel title="Subshell level diagram">
-                <EnergyDiagram element={element} model={state.model} activeLabel={sub.label} onPick={(n, l) => dispatch({ type: "selectSubshell", n, l })} />
+                <EnergyDiagram element={element} model={state.model} activeLabel={sub.label} hfDataset={hfDataset} onPick={(n, l) => dispatch({ type: "selectSubshell", n, l })} />
               </Panel>
             )}
             {tab === "inspector" && (

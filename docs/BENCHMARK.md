@@ -1,25 +1,25 @@
 # Renderer benchmark
 
-Generated: 2026-11-19T11:15:54.985Z
+Generated: 2026-11-20T21:30:26.952Z
 
 **Rendering mode: SwiftShader / ANGLE — CPU software rasterisation (CI container, no GPU)**
 
 - WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`
-- OS: linux 6.1.189+ x64
-- Browser: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/131.0.6778.33 Safari/537.36
+- OS: linux 4.19.0-gvisor x64
+- Browser: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.8059.12 Safari/537.36
 - Viewport: 1440×900, devicePixelRatio 1, point sprites additive blended
 - Protocol: `?z&samples&mode&adaptive=0`; 4 s warm-up, six telemetry FPS samples 700 ms apart; median reported. Sampling and upload times are from the app's worker/upload timers.
 - Hardware acceleration: NOT USED — these FPS values say nothing about real GPU performance
 
 | mode | Z | requested samples | rendered points | median FPS | min–max | sampling (ms) | GPU upload (ms) |
 |---|---|---|---|---|---|---|---|
-| single | 1 | 25,000 | 25,000 | 21 | 8–28 | 54 | 4.2 |
-| single | 1 | 75,000 | 75,000 | 11 | 1–36 | 98 | 2.6 |
-| single | 1 | 150,000 | 150,000 | 5 | 5–5 | 114 | 4.7 |
-| single | 1 | 300,000 | 300,000 | 2 | 2–3 | 228 | 27.1 |
-| atom | 10 | 75,000 | 75,000 | 10 | 2–36 | 70 | 0.5 |
-| atom | 10 | 150,000 | 150,000 | 3 | 3–3 | 110 | 1 |
-| atom | 10 | 300,000 | 300,000 | 2 | 2–2 | 163 | 18.8 |
+| single | 1 | 25,000 | 25,000 | 19 | 18–21 | 55 | 5.5 |
+| single | 1 | 75,000 | 75,000 | 8 | 7–12 | 130 | 5 |
+| single | 1 | 150,000 | 150,000 | 5 | 4–5 | 134 | 7.2 |
+| single | 1 | 300,000 | 300,000 | 2 | 1–3 | 287 | 11.8 |
+| atom | 10 | 75,000 | 75,000 | 11 | 7–12 | 90 | 5.8 |
+| atom | 10 | 150,000 | 150,000 | 5 | 3–6 | 88 | 8.6 |
+| atom | 10 | 300,000 | 300,000 | 3 | 1–3 | 144 | 11.8 |
 
 ## Interpretation
 

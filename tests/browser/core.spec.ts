@@ -86,6 +86,6 @@ test("rapid element changes leave the newest selection visible (no stale results
   await expect(page.locator("header.h-12")).toContainText("Neon");
   await expect(page.locator("header.h-12")).toContainText("worker");
   await page.getByRole("button", { name: /Full-atom density/ }).click();
-  await expect(page.locator("header.h-12")).toContainText("all 3 subshells");
+  await expect(page.locator("header.h-12")).toContainText("3 subshells");
   expect(errors).toEqual([]);
 });

@@ -1,0 +1,60 @@
+{
+  "schema": "atoms.sources-manifest.v1",
+  "retrieved": "2026-11-20",
+  "sources": [
+    {
+      "id": "nist-asd-ie",
+      "title": "NIST Atomic Spectra Database \u2014 Ground Levels and Ionization Energies for Neutral Atoms (Z=1..108)",
+      "url": "https://physics.nist.gov/cgi-bin/ASD/ie.pl?spectra=H-Og+I&units=1&format=3&order=0&at_num_out=on&sp_name_out=on&ion_charge_out=on&el_name_out=on&seq_out=on&shells_out=on&level_out=on&ion_conf_out=on&e_out=0&unc_out=on&biblio=on&submit=Retrieve+Data",
+      "portal": "https://physics.nist.gov/PhysRefData/ASD/ionEnergy.html",
+      "file": "data/sources/nist_asd_ie.tsv",
+      "bytes": 12549,
+      "sha256": "c976723761930dbc163ebf24647c561b2607e16b9b405e0aca991afa983b1e06",
+      "license": "NIST Standard Reference Data (public domain / attribution requested)",
+      "coverage": "Z = 1..108 neutral atoms (Z=109..118 absent in ASD IE query)"
+    },
+    {
+      "id": "lobato2026-dirac-pade",
+      "title": "Updated all-electron Dirac\u2013Fock densities and an element-adaptive parameterisation (Lobato, Zhang, Van Aert, Kirkland 2026)",
+      "url": "https://raw.githubusercontent.com/NeuralSoftX/scattering_factors_2026/main/adaptive_dirac_pade_scattering_factor_2026/data/coefficients_txt/coefficients_adaptive_dirac_pade.txt",
+      "paper": "https://arxiv.org/abs/2608.14934",
+      "repo": "https://github.com/NeuralSoftX/scattering_factors_2026",
+      "file": "data/sources/lobato2026_adaptive_dirac_pade.txt",
+      "bytes": 107701,
+      "sha256": "86cbd465973c0701c944f66f57ef045dfeacaa5caeabdb8af9f6d8fcd8de078a",
+      "license": "Apache-2.0",
+      "coverage": "Z = 1..118 neutral atoms (B-spline Dirac-Fock atomx for Z=2..118, exact Dirac 1s for Z=1)"
+    },
+    {
+      "id": "lobato2026-positivity-certificate",
+      "title": "Global positivity certificate for Lobato et al. (2026) Dirac\u2013Pad\u00e9 parameterization",
+      "url": "https://raw.githubusercontent.com/NeuralSoftX/scattering_factors_2026/main/adaptive_dirac_pade_scattering_factor_2026/data/global_positivity_certificate.json",
+      "file": "data/sources/lobato2026_positivity_certificate.json",
+      "bytes": 7695,
+      "sha256": "05b46e68d35abde5b06e7ff5b007b50202c8e03ea74700772b4e2f7508950a49",
+      "license": "Apache-2.0",
+      "coverage": "Z = 1..118 verified globally positive rho(r) > 0 and V(r) > 0"
+    }
+  ],
+  "nonMirroredReferences": [
+    {
+      "id": "iupac-ciaaw-2021",
+      "title": "IUPAC/CIAAW Standard Atomic Weights (2021)",
+      "url": "https://ciaaw.org/atomic-weights.htm",
+      "note": "Published standard atomic weights and longest-lived isotope mass numbers for radioactive/synthetic elements."
+    },
+    {
+      "id": "cordero-2008",
+      "title": "Covalent radii revisited (Cordero et al., Dalton Trans. 2008, 2832\u20132838)",
+      "doi": "10.1039/B801115J",
+      "coverage": "Z = 1..96 single-bond covalent radii"
+    },
+    {
+      "id": "datatoms-2026-1z118-1n10",
+      "title": "Datatoms 2026-1z118-1n10 MCDF dataset (Becht, Pillet, Hupin, Indelicato 2026)",
+      "doi": "10.57745/5RV42G",
+      "license": "CC BY 4.0",
+      "coverage": "1 <= Z <= 118, 1 <= N <= 10 (neutral atoms only up to Z=10; ions for Z>10)"
+    }
+  ]
+}

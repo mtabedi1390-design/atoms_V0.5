@@ -25,7 +25,7 @@ export interface SamplingParams extends QuantumNumbers {
    * uniformly from −l…l (complex basis). By Unsöld's theorem Σ_m|Y_lm|² = (2l+1)/4π, so the
    * density assigned to each sample is R²/(4π). Used for Mode B (independent-electron atom).
    */
-  readonly mix?: "single" | "subshell-average" | "tabulated" | "tabulated-hf";
+  readonly mix?: "single" | "subshell-average" | "tabulated" | "tabulated-hf" | "tabulated-df";
   /** Electrons assigned to this subshell (configuration-average density weighting). */
   readonly occupancy?: number;
   /** Precomputed spherically averaged density (r in a0, rho in electrons/a0³). */
@@ -190,7 +190,7 @@ export class SamplerCache {
     validateQN(p);
     let rMax: number;
     let radial: CdfTable;
-    if (p.mix === "tabulated-hf" || p.mix === "tabulated") {
+    if (p.mix === "tabulated-hf" || p.mix === "tabulated-df" || p.mix === "tabulated") {
       const tab = p.tabulated;
       if (!tab) throw new Error("tabulated sampling requested without a table");
       rMax = tab.r[tab.r.length - 1];
@@ -226,7 +226,7 @@ export class SamplerCache {
 }
 
 export function sampleOrbital(p: SamplingParams, cache: SamplerCache, onProgress?: (frac: number) => void, shouldCancel?: () => boolean): SampleResult | null {
-  const tabulated = p.mix === "tabulated-hf" || p.mix === "tabulated";
+  const tabulated = p.mix === "tabulated-hf" || p.mix === "tabulated-df" || p.mix === "tabulated";
   const mix = p.mix === "subshell-average";
   const T = cache.tables(tabulated ? p : mix ? { ...p, m: 0, basis: "complex" } : p);
   const dom = { includedMass: T.radial.rawMass, tailMass: Math.max(0, 1 - T.radial.rawMass), expansions: 0 };

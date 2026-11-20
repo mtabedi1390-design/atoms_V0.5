@@ -1,44 +1,38 @@
-# Atomic data provenance
+# Atomic Data Provenance & Pipeline (`v0.5.0`)
 
-## Workspace reality
+## 1. Pinned Source Snapshots & Verification
 
-The continuation directive describes a generated data pipeline with pinned source snapshots. Those
-files were **not present** in this workspace. The 118-element table in `src/data/elements.ts` was
-compiled by hand in the earlier session and is validated structurally here. It has not been
-re-generated from pinned machine-readable snapshots. Treat values as transcribed citations and
-re-verify against the live sources before publication.
+All primary scientific datasets shipped in `v0.5.0` are pinned as verbatim snapshots under `data/sources/` with cryptographic SHA-256 checksums recorded in `data/sources/MANIFEST.json` and verified by `python3 science/build_atomic_data.py`:
 
-## Fields and sources
+| Pinned Snapshot File | Upstream Source | License | SHA-256 | Coverage |
+|---|---|---|---|---|
+| `data/sources/nist_asd_ie.tsv` | NIST Atomic Spectra Database IE query (`physics.nist.gov/cgi-bin/ASD/ie.pl`) | Public reference data (NIST) | `c976723761930dbc163ebf24647c561b2607e16b9b405e0aca991afa983b1e06` | `Z = 1..108` neutral atoms (`Z = 109..118` absent from ASD IE query) |
+| `data/sources/lobato2026_adaptive_dirac_pade.txt` | Lobato et al. (2026), `arXiv:2608.14934` (`github.com/NeuralSoftX/scattering_factors_2026`) | Apache-2.0 | `86cbd465973c0701c944f66f57ef045dfeacaa5caeabdb8af9f6d8fcd8de078a` | `Z = 1..118` Dirac–Padé total radial density parameters |
+| `data/sources/lobato2026_positivity_certificate.json` | Lobato et al. (2026) positivity certificate | Apache-2.0 | `05b46e68d35abde5b06e7ff5b007b50202c8e03ea74700772b4e2f7508950a49` | All 118 elements globally non-negative |
 
-| Field | Definition / convention | Source | Evidence classes |
+Running `npm run data:build` (`python3 science/build_atomic_data.py`) verifies every SHA-256 hash against `MANIFEST.json` before regenerating:
+- `src/data/nist/asd_ground_levels.json` (108 records)
+- `src/data/df/lobato2026.json` (118 records; verifies positivity and charge integral $\int_0^\infty 4\pi r^2\rho(r)\,dr = Z$ with `max relative charge error: 1.991e-07`).
+
+---
+
+## 2. Per-Field Provenance in `src/data/elements.ts`
+
+| Field | Definition / Convention | Source | Evidence Classes |
 |---|---|---|---|
-| Z, symbol, name | IUPAC | IUPAC periodic table | evaluated |
-| mass | standard atomic weight (u); for elements without one, **mass number of longest-lived isotope** in brackets | IUPAC/CIAAW 2021 abridged | evaluated / measured |
-| category, group, period, block | 18-column table; La/Ac/Lu/Lr placed in d-block cells, other lanthanides/actinides in f-block rows | IUPAC layout | evaluated |
-| ground configuration | noble-gas shorthand from Aufbau + validated exceptions (Cr, Cu, Nb, Mo, Ru, Rh, Pd, Ag, La, Ce, Gd, Pt, Au, Ac, Th, Pa, U, Np, Cm, Lr) | NIST ASD ground levels | evaluated; `predicted` for Z ≥ 104 |
-| ionization energy | first ionization energy of the neutral atom (eV) | NIST ASD ionization energies | evaluated/measured; `unavailable` = null |
-| covalent radius | single-bond covalent radius (pm), Cordero et al., Dalton Trans. 2008, 2832 | Cordero 2008 | evaluated; null beyond Z=96 |
+| `Z`, `symbol`, `name` | IUPAC atomic number, symbol, name | IUPAC periodic table | `evaluated` |
+| `mass`, `massKind` | Standard atomic weight (u) or mass number of longest-lived isotope (`[A]`) | IUPAC/CIAAW 2021 abridged | `evaluated` / `measured` |
+| `category`, `group`, `period`, `block` | 18-column periodic layout (`La/Ac/Lu/Lr` in `d`-block columns; other inner-transition in `f`-block) | IUPAC layout | `evaluated` |
+| `configuration` | Noble-gas shorthand with Aufbau exceptions (`Cr, Cu, Nb, Mo, Ru, Rh, Pd, Ag, La, Ce, Gd, Pt, Au, Ac, Th, Pa, U, Np, Cm, Lr`) | NIST ASD (`Z ≤ 103`); theoretical relativistic predictions (`Z ≥ 104`) | `evaluated` / `predicted` |
+| `groundTerm`, `groundJ` | Neutral ground-state term symbol & total angular momentum $J$ | Pinned NIST ASD snapshot (`asd_ground_levels.json`) | `evaluated` (`Z ≤ 103`), `predicted` (`Z = 104..108`), `unavailable` (`Z = 109..118`) |
+| `ionizationEnergy_eV`, `ionizationUncertainty_eV`, `ionizationRef` | First ionization energy of the neutral atom (`eV`) | Pinned NIST ASD snapshot (`asd_ground_levels.json`) | `evaluated` / `measured`, `predicted` (`Pa, Fm, Md, 104..108`), `unavailable` (`Z = 109..118`) |
+| `covalentRadius_pm` | Single-bond covalent radius (`pm`, `Z ≤ 96`; never mixed with van der Waals radii) | Cordero et al., *Dalton Trans.* 2008, 2832 | `evaluated` (`Z ≤ 96`), `unavailable` (`Z ≥ 97`) |
+| `isOpenShell` | Boolean flag indicating any partially occupied subshell (`occupancy < 2(2l+1)`) | Derived from ground subshells | Exact structural property |
 
-**Do not conflate:** standard atomic weight ≠ isotope mass; covalent radius ≠ van der Waals radius
-(the archived snapshot's PubChem radius was a vdW radius, a different property, and is not merged
-here); first ionization energy ≠ orbital eigenvalue ≠ total HF energy.
+---
 
-## Integrity enforcement (tests)
+## 3. Bundled Hartree–Fock Datasets (`src/data/hf/*.json`)
 
-* exactly 118 elements; unique Z/symbol/name; Z = index+1
-* neutral-atom electron count = Z
-* Pauli capacity 2(2l+1) per subshell
-* documented configuration exceptions (including Lr 7s²7p¹)
-* block/group/period ranges
-* predicted vs evaluated flags for Z ≥ 104
-* missing values are `null` with `unavailable` evidence (never 0/fabricated)
-* Slater Z_eff textbook checks (N 2p 3.90, Zn 4s 4.35, Zn 3d 8.85, K 4s 2.20)
-
-## HF data (`src/data/hf/*.json`, `atoms.hf-radial.v1`)
-
-Generated by `python3 science/hf_export.py` with PySCF 2.15.1 (Apache-2.0), RHF/ROHF,
-aug-cc-pVTZ, point nucleus, non-relativistic. Fields: engine/version/licence, method, term, basis,
-SCF convergence & cycles, energy (Ha/eV), numerical-HF-limit reference and source, basis error,
-radial grid, spherical density, angular grid, quadrature, integrated electrons, tolerances,
-known limitations, command, generation date. Validation tests re-integrate 4πr²ρ (within 2×10⁻³ e)
-and compare energies with the HF limits (variationality + < 0.02 Ha).
+- Schema: `atoms.hf-radial.v1` (`H.json`, `He.json`, `C.json`, `N.json`, `O.json`, `Ne.json`).
+- Generator: `python3 science/hf_export.py` using PySCF 2.15.1 (Apache-2.0), RHF/ROHF, `aug-cc-pVTZ`, point nucleus, non-relativistic.
+- Runtime & test validation (`validateHFDataset`, `integrateDatasetElectrons`): enforces strict monotonic `rBohr > 0`, non-negative `rhoElectronPerBohr3`, integrated electron count within `0.5%` of `Z`, and variational energy checks against numerical HF limits.

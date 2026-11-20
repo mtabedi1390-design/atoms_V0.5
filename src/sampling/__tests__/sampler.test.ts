@@ -200,3 +200,26 @@ describe("occupancy-weighted configuration-average density", () => {
     expect(res.radial.tailMass).toBeLessThanOrEqual(1e-8);
   });
 });
+
+import { diracFockRadialGrid } from "@/physics/diracFock";
+
+describe("tabulated Dirac-Fock density sampling (Z = 79 Au & Z = 118 Og)", () => {
+  const cache = new SamplerCache();
+  it("radii follow the Lobato 2026 Dirac-Fock CDF (KS test) and integrate to Z", () => {
+    for (const Z of [79, 118] as const) {
+      const grid = diracFockRadialGrid(Z);
+      const p: SamplingParams = {
+        n: 1, l: 0, m: 0, zeff: Z, basis: "complex", count: 25000, seed: 77,
+        modelId: "lobato2026-df", mix: "tabulated-df",
+        tabulated: { id: `df:${Z}`, r: grid.rBohr, rho: grid.rhoElectronPerBohr3, expectedElectrons: Z },
+      };
+      const res = sampleOrbital(p, cache)!;
+      const radii = new Float64Array(p.count);
+      for (let i = 0; i < p.count; i++) radii[i] = Math.hypot(res.positions[3 * i], res.positions[3 * i + 1], res.positions[3 * i + 2]);
+      const ref = buildCdfSamples(grid.rBohr, grid.rBohr.map((r, i) => 4 * Math.PI * r * r * grid.rhoElectronPerBohr3[i]));
+      expect(ksStat(radii, tableCdf(ref))).toBeLessThan(ksCrit(radii.length));
+      expect(Math.abs(res.electrons - Z) / Z).toBeLessThan(1e-3);
+    }
+  });
+});
+

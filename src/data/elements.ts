@@ -1,18 +1,19 @@
 /**
  * 118-element atomic database with per-field provenance.
  *
- * Sources (transcribed at implementation time; see src/data/sources.ts):
+ * Sources (driven by pinned snapshots in data/sources/ and normalized JSONs):
  *  - Standard atomic weights: IUPAC/CIAAW abridged standard atomic weights (2021 table),
  *    https://ciaaw.org/atomic-weights.htm . For elements without a standard atomic weight
  *    the mass number of the longest-lived known isotope is given and flagged.
- *  - Ground-state configurations & first ionization energies: NIST Atomic Spectra Database,
- *    Ground Levels and Ionization Energies for the Neutral Atoms,
- *    https://physics.nist.gov/PhysRefData/ASD/ionEnergy.html .  Z ≥ 104 configurations are
- *    theoretical predictions (relativistic calculations) and flagged `predicted`.
+ *  - Ground-state configurations, ground term symbols & J, and first ionization energies:
+ *    Pinned NIST Atomic Spectra Database snapshot (src/data/nist/asd_ground_levels.json,
+ *    Z = 1..108; Z = 109..118 unavailable in ASD IE query; Z >= 104 flagged `predicted`).
  *  - Covalent radii: Cordero et al., Dalton Trans. 2008, 2832 (single-bond covalent radii,
- *    Z ≤ 96; Mn/Fe/Co low-spin values; C sp³).  Elements without a value are `null`.
+ *    Z <= 96; Mn/Fe/Co low-spin values; C sp3). Elements without a value are `null`.
  */
 import { subshellLabel } from "@/physics/hydrogenic";
+import asdGroundLevels from "./nist/asd_ground_levels.json";
+import { SOURCES } from "./sources";
 
 export type ElementCategory =
   | "alkali metal"
@@ -54,8 +55,13 @@ export interface ElementRecord {
   readonly period: number;
   readonly block: Block;
   readonly configuration: Provenanced<string>; // noble-gas shorthand
+  readonly groundTerm: Provenanced<string | null>; // e.g. "3P0", "7S<3>", null if unavailable
+  readonly groundJ: string | null;
+  readonly isOpenShell: boolean;
   readonly subshells: readonly Subshell[]; // full, ordered by (n+l, n)
   readonly ionizationEnergy_eV: Provenanced<number | null>;
+  readonly ionizationUncertainty_eV: number | null;
+  readonly ionizationRef: string | null;
   readonly covalentRadius_pm: Provenanced<number | null>;
 }
 
@@ -263,14 +269,59 @@ function blockOf(Z: number, subs: readonly Subshell[]): Block {
   return "p";
 }
 
-const SRC_NIST = "NIST ASD, Ground Levels and Ionization Energies for the Neutral Atoms (physics.nist.gov/PhysRefData/ASD/ionEnergy.html)";
-const SRC_IUPAC = "IUPAC/CIAAW Standard Atomic Weights 2021 (ciaaw.org/atomic-weights.htm), abridged to 5 significant figures";
-const SRC_CORDERO = "Cordero et al., Dalton Trans. 2008, 2832–2838 (covalent radii)";
+const SRC_NIST = `${SOURCES.nistAsd.shortName} (${SOURCES.nistAsd.url})`;
+const SRC_IUPAC = `${SOURCES.iupacCiaaw.shortName} (${SOURCES.iupacCiaaw.url}), abridged to 5 significant figures`;
+const SRC_CORDERO = `${SOURCES.cordero2008.citation}`;
+
+interface NistAsdRow {
+  Z: number;
+  symbol: string;
+  name: string;
+  groundShells: string;
+  groundLevel: string | null;
+  groundJ: string | null;
+  ie_eV: number | null;
+  ieKind: "measured-or-evaluated" | "theoretical-or-interpolated" | "unavailable";
+  ieMarker: string | null;
+  uncertainty_eV: number | null;
+  references: string | null;
+}
+
+const NIST_BY_Z = new Map<number, NistAsdRow>(
+  (asdGroundLevels.records as NistAsdRow[]).map((rec) => [rec.Z, rec]),
+);
 
 export const ELEMENTS: readonly ElementRecord[] = R.map((row) => {
-  const [Z, symbol, name, mass, stdMass, category, group, period, ie, rcov] = row;
+  const [Z, symbol, name, mass, stdMass, category, group, period, ieFallback, rcov] = row;
   const subshells = buildSubshells(Z);
   const predicted = Z >= 104;
+  const nist = NIST_BY_Z.get(Z);
+  const isOpenShell = subshells.some((s) => s.occupancy < 2 * (2 * s.l + 1));
+
+  // Ionization energy: prefer pinned NIST ASD snapshot (Z=1..108), falling back to row only if absent; Z>=109 is null/unavailable
+  const ieValue = nist ? nist.ie_eV : ieFallback;
+  let ieEvidence: Evidence;
+  let ieNote: string | undefined;
+  if (ieValue === null) {
+    ieEvidence = "unavailable";
+  } else if (Z >= 104 && nist?.ieKind === "theoretical-or-interpolated") {
+    ieEvidence = "predicted";
+    ieNote = `NIST ASD ${nist.ieMarker ?? ""} theoretical/interpolated value (±${nist.uncertainty_eV ?? "?"} eV)`;
+  } else if (nist?.ieKind === "theoretical-or-interpolated" && Z !== 1) {
+    // Pa, Fm, Md: NIST ASD bracketed semi-empirical/interpolated values
+    ieEvidence = "predicted";
+    ieNote = `NIST ASD ${nist.ieMarker ?? "[]"} interpolated/semi-empirical value (±${nist.uncertainty_eV ?? "?"} eV)`;
+  } else if (Z >= 100) {
+    ieEvidence = "measured";
+    if (Z === 103) ieNote = "Sato et al., Nature 520, 209 (2015)";
+  } else {
+    ieEvidence = "evaluated";
+    if (Z === 1) ieNote = "CODATA/NIST theoretical ground-state threshold (HDEL)";
+  }
+
+  const termVal = nist?.groundLevel ?? null;
+  const termEvidence: Evidence = termVal === null ? "unavailable" : Z >= 104 ? "predicted" : "evaluated";
+
   return {
     Z,
     symbol,
@@ -288,16 +339,26 @@ export const ELEMENTS: readonly ElementRecord[] = R.map((row) => {
     configuration: {
       value: configString(Z, subshells),
       evidence: predicted ? "predicted" : "evaluated",
-      source: predicted ? "Theoretical prediction (relativistic calculations summarised in NIST ASD / literature); not spectroscopically confirmed" : SRC_NIST,
+      source: predicted ? "Theoretical prediction (relativistic calculations summarised in literature); not spectroscopically confirmed" : SRC_NIST,
       note: EXCEPTIONS[Z] ? "Non-Aufbau ground state (validated exception)" : undefined,
     },
+    groundTerm: {
+      value: termVal,
+      evidence: termEvidence,
+      source: termVal === null ? "No evaluated or NIST ASD term entry (Z >= 109)" : SRC_NIST,
+      note: Z >= 104 && termVal !== null ? "Theoretical/predicted ground level in NIST ASD" : undefined,
+    },
+    groundJ: nist?.groundJ ?? null,
+    isOpenShell,
     subshells,
     ionizationEnergy_eV: {
-      value: ie,
-      evidence: ie === null ? "unavailable" : Z >= 100 ? "measured" : "evaluated",
-      source: ie === null ? "No evaluated experimental value" : SRC_NIST,
-      note: Z === 103 ? "Sato et al., Nature 520, 209 (2015)" : Z === 104 ? "NIST ASD; large uncertainty" : undefined,
+      value: ieValue,
+      evidence: ieEvidence,
+      source: ieValue === null ? "No evaluated experimental or NIST ASD value" : SRC_NIST,
+      note: ieNote,
     },
+    ionizationUncertainty_eV: nist?.uncertainty_eV ?? null,
+    ionizationRef: nist?.references ?? null,
     covalentRadius_pm: {
       value: rcov,
       evidence: rcov === null ? "unavailable" : "evaluated",

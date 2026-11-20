@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
-import { HF_ATOMS, PROVIDERS, graspProvider, hfDatasetFor, integrateDatasetElectrons, pyscfHFProvider, selectProvider, validateHFDataset } from "../providers";
+import {
+  HF_ATOMS,
+  PROVIDERS,
+  datatomsProvider,
+  graspProvider,
+  hfDatasetFor,
+  integrateDatasetElectrons,
+  lobatoDFProvider,
+  pyscfHFProvider,
+  selectProvider,
+  validateHFDataset,
+} from "../providers";
+import { COVERAGE_MATRIX, coverageForZ } from "../coverageMatrix";
 
 const dir = join(process.cwd(), "src/data/hf");
 
@@ -36,7 +48,6 @@ describe("offline HF datasets (real PySCF output)", () => {
     for (const z of HF_ATOMS) {
       const d = hfDatasetFor(z)!;
       expect(Math.abs(d.energy_hartree - d.reference.value_hartree)).toBeLessThan(0.02);
-      // variational: a finite-basis HF energy cannot be below the HF limit
       expect(d.energy_hartree).toBeGreaterThanOrEqual(d.reference.value_hartree - 2e-4);
       expect(d.basisError_hartree).toBeCloseTo(d.energy_hartree - d.reference.value_hartree, 10);
     }
@@ -51,43 +62,79 @@ describe("offline HF datasets (real PySCF output)", () => {
     }
     const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
     expect(files.sort()).toEqual(["C.json", "H.json", "He.json", "N.json", "Ne.json", "O.json"]);
-    // every bundled file is validated at import time; re-read one to prove it is the same data
     const raw = JSON.parse(readFileSync(join(dir, "Ne.json"), "utf8"));
     expect(raw.atom.symbol).toBe("Ne");
   });
 });
 
-describe("provider selection policy", () => {
-  it("selects PySCF HF for benchmark atoms at quantitative accuracy and validates it", () => {
-    const sel = selectProvider({ Z: 10, observable: "electron-density", accuracy: "quantitative" });
-    expect(sel.provider.id).toBe("pyscf-hf");
-    expect(sel.result?.dataset?.atom.symbol).toBe("Ne");
-    expect(sel.result?.validation.passed).toBe(true);
-    expect(sel.result?.validation.checks.every((c) => c.passed)).toBe(true);
+describe("provider selection policy (v0.5.0)", () => {
+  it("selects Lobato 2026 Dirac-Fock for quantitative & relativistic total density across Z = 1..118", () => {
+    for (const Z of [1, 6, 10, 26, 47, 64, 79, 92, 118]) {
+      const sel = selectProvider({ Z, observable: "electron-density", accuracy: "quantitative" });
+      expect(sel.provider.id).toBe("lobato2026-df");
+      expect(sel.result?.evidenceClass).toBe("computed-and-validated");
+      expect(sel.result?.densityTable).toBeDefined();
+      expect(sel.result?.validation.passed).toBe(true);
+      expect(Math.abs(sel.result!.densityTable!.integratedElectrons - Z) / Z).toBeLessThan(1e-3);
+    }
+    const rel = selectProvider({ Z: 79, observable: "relativistic-density", accuracy: "high" });
+    expect(rel.provider.id).toBe("lobato2026-df");
+    expect(rel.result?.metadata.relativistic).toMatch(/Dirac[-–]Fock/i);
   });
-  it("uses the browser Slater estimate for elements with no offline dataset", () => {
-    const sel = selectProvider({ Z: 92, observable: "electron-density", accuracy: "quantitative" });
-    expect(sel.provider.id).toBe("browser-slater");
-    expect(sel.result).not.toBeNull();
-    expect(sel.result?.dataset).toBeUndefined();
+
+  it("keeps PySCF HF available for bundled benchmark atoms and unavailable elsewhere", () => {
+    expect(pyscfHFProvider.supports({ Z: 10, observable: "electron-density", accuracy: "quantitative" })).toBe(true);
+    const neHF = pyscfHFProvider.compute({ Z: 10, observable: "electron-density", accuracy: "quantitative" });
+    expect(neHF?.dataset?.atom.symbol).toBe("Ne");
+    expect(neHF?.evidenceClass).toBe("computed-basis-limited");
+
+    expect(pyscfHFProvider.supports({ Z: 26, observable: "electron-density", accuracy: "quantitative" })).toBe(false);
+    expect(pyscfHFProvider.compute({ Z: 26, observable: "electron-density", accuracy: "quantitative" })).toBeNull();
+    expect(pyscfHFProvider.compute({ Z: 6, observable: "electron-density", accuracy: "quantitative" })?.metadata.method).toContain("ROHF");
   });
-  it("does not fabricate a heavy-atom total energy or fine structure", () => {
+
+  it("uses total-energy only where HF is bundled and refuses fine-structure / ab-initio subshells", () => {
+    const neE = selectProvider({ Z: 10, observable: "total-energy", accuracy: "quantitative" });
+    expect(neE.provider.id).toBe("pyscf-hf");
+    expect(neE.result?.dataset?.energy_hartree).toBeLessThan(-128);
+
     expect(selectProvider({ Z: 92, observable: "total-energy", accuracy: "high" }).result).toBeNull();
     expect(selectProvider({ Z: 55, observable: "fine-structure", accuracy: "high" }).result).toBeNull();
+    expect(selectProvider({ Z: 79, observable: "subshell-orbitals-ab-initio", accuracy: "high" }).result).toBeNull();
   });
-  it("GRASP/MCDHF is visibly unavailable with a concrete blocker, never silently substituted", () => {
+
+  it("Datatoms and GRASP/MCDHF are visibly scope-limited / unavailable with concrete blockers", () => {
+    expect(datatomsProvider.availability.available).toBe(false);
+    expect(datatomsProvider.availability.blocker).toMatch(/1 <= N <= 10/);
     expect(graspProvider.availability.available).toBe(false);
     expect(graspProvider.availability.blocker).toMatch(/GRASP2018 is not installed/);
-    expect(graspProvider.supports({ Z: 55, observable: "fine-structure", accuracy: "high" })).toBe(false);
     const sel = selectProvider({ Z: 55, observable: "fine-structure", accuracy: "high" });
     expect(sel.result).toBeNull();
     expect(sel.avoided.some((a) => a.id === "grasp-mcdhf" && /GRASP/.test(a.reason))).toBe(true);
+    expect(sel.avoided.some((a) => a.id === "datatoms-2026-mcdf" && /1 <= N <= 10/.test(a.reason))).toBe(true);
   });
-  it("registers all providers and marks PySCF available only where data exists", () => {
-    expect(PROVIDERS.map((p) => p.id)).toEqual(["pyscf-hf", "browser-slater", "grasp-mcdhf"]);
-    expect(pyscfHFProvider.supports({ Z: 26, observable: "electron-density", accuracy: "quantitative" })).toBe(false);
-    expect(pyscfHFProvider.supports({ Z: 6, observable: "electron-density", accuracy: "quantitative" })).toBe(true);
-    expect(pyscfHFProvider.compute({ Z: 6, observable: "electron-density", accuracy: "quantitative" })?.metadata.method).toContain("ROHF");
-    expect(pyscfHFProvider.compute({ Z: 26, observable: "electron-density", accuracy: "quantitative" })).toBeNull();
+
+  it("registers all 5 providers in priority order", () => {
+    expect(PROVIDERS.map((p) => p.id)).toEqual([
+      "lobato2026-df",
+      "pyscf-hf",
+      "browser-slater",
+      "datatoms-2026-mcdf",
+      "grasp-mcdhf",
+    ]);
+    expect(lobatoDFProvider.availability.available).toBe(true);
+  });
+});
+
+describe("118-element coverage matrix", () => {
+  it("provides a complete row for every Z = 1..118 with honest statuses", () => {
+    expect(COVERAGE_MATRIX).toHaveLength(118);
+    expect(coverageForZ(1).subshellOrbitals.status).toBe("validated/computed");
+    expect(coverageForZ(26).subshellOrbitals.status).toBe("approximate");
+    expect(coverageForZ(10).totalDensityHF.status).toBe("validated/computed");
+    expect(coverageForZ(26).totalDensityHF.status).toBe("not-available");
+    expect(coverageForZ(104).ionizationEnergy.status).toBe("predicted");
+    expect(coverageForZ(118).ionizationEnergy.status).toBe("not-available");
+    expect(coverageForZ(118).totalDensityDF.status).toBe("validated/computed");
   });
 });

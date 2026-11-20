@@ -52,6 +52,7 @@ export function PeriodicTable({ selectedZ, onSelect }: Props) {
       <div className="flex items-center gap-2">
         <input
           value={query}
+          aria-label="Search elements by symbol, name, or atomic number"
           onChange={(e) => {
             setQuery(e.target.value);
             const v = e.target.value.trim().toLowerCase();
@@ -61,7 +62,7 @@ export function PeriodicTable({ selectedZ, onSelect }: Props) {
           placeholder="Search symbol / name / Z"
           className="h-7 flex-1 rounded-sm border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-zinc-500"
         />
-        <select value={colorBy} onChange={(e) => setColorBy(e.target.value as "category" | "block")} className="h-7 rounded-sm border border-zinc-700 bg-zinc-900 px-1 text-xs text-zinc-300">
+        <select aria-label="Color periodic table by" value={colorBy} onChange={(e) => setColorBy(e.target.value as "category" | "block")} className="h-7 rounded-sm border border-zinc-700 bg-zinc-900 px-1 text-xs text-zinc-300">
           <option value="block">colour: block</option>
           <option value="category">colour: category</option>
         </select>
@@ -79,15 +80,24 @@ export function PeriodicTable({ selectedZ, onSelect }: Props) {
           const color = colorBy === "block" ? BLOCK_COLORS[e.block] : CATEGORY_COLORS[e.category];
           const sel = e.Z === selectedZ;
           const dim = !matches(e);
+          const predicted = e.configuration.evidence === "predicted";
           return (
             <button
               key={e.Z}
               role="gridcell"
               aria-selected={sel}
-              title={`${e.name} (Z=${e.Z}) — ${e.configuration.value}`}
+              aria-label={`${e.name}, Z=${e.Z}, ${e.configuration.evidence}`}
+              title={`${e.name} (Z=${e.Z}) — ${e.configuration.value} (${e.configuration.evidence})`}
               onClick={() => onSelect(e.Z)}
-              style={{ gridRow: row + (row >= 9 ? 1 : 0), gridColumn: col, borderColor: sel ? "#fff" : color + "55", background: sel ? color : color + "22", opacity: dim ? 0.25 : 1 }}
-              className="flex aspect-square flex-col items-center justify-center rounded-[2px] border text-[9px] leading-none text-zinc-100 transition-colors hover:brightness-150"
+              style={{
+                gridRow: row + (row >= 9 ? 1 : 0),
+                gridColumn: col,
+                borderColor: sel ? "#fff" : color + "55",
+                borderStyle: predicted && !sel ? "dashed" : "solid",
+                background: sel ? color : color + "22",
+                opacity: dim ? 0.25 : 1,
+              }}
+              className="relative flex aspect-square flex-col items-center justify-center rounded-[2px] border text-[9px] leading-none text-zinc-100 transition-colors hover:brightness-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-300"
             >
               <span className="font-mono text-[7px] text-zinc-400">{e.Z}</span>
               <span className="font-semibold">{e.symbol}</span>
@@ -99,6 +109,7 @@ export function PeriodicTable({ selectedZ, onSelect }: Props) {
         {colorBy === "block"
           ? Object.entries(BLOCK_COLORS).map(([k, c]) => <span key={k} className="flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm" style={{ background: c }} />{k}-block</span>)
           : Object.entries(CATEGORY_COLORS).map(([k, c]) => <span key={k} className="flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm" style={{ background: c }} />{k}</span>)}
+        <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm border border-dashed border-zinc-400" />predicted config (Z ≥ 104)</span>
       </div>
     </div>
   );

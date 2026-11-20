@@ -6,6 +6,7 @@ import type { ModelId } from "@/physics/models";
 import type { RenderSettings } from "@/render/OrbitalScene";
 
 export type ViewMode = "single" | "atom";
+export type DensitySource = "dirac-fock" | "hf" | "model";
 
 export interface LayerUI {
   visible: boolean;
@@ -23,8 +24,8 @@ export interface AppState {
   allowUnoccupied: boolean;
   basis: AngularBasis;
   model: ModelId;
-  /** Full-atom density source: the Slater model or a bundled offline HF radial density. */
-  densitySource: "model" | "hf";
+  /** Full-atom density source: relativistic Dirac-Fock (Z=1..118), PySCF HF (6 atoms), or Slater subshell average. */
+  densitySource: DensitySource;
   count: number;
   seed: number;
   showCurrent: boolean;
@@ -68,15 +69,26 @@ export function initialState(): AppState {
   const Z = Number.isInteger(qz) && qz >= 1 && qz <= 118 ? qz : 1;
   const qs = Number(qp.get("samples"));
   const count = Number.isFinite(qs) && qs >= 25000 && qs <= 300000 ? Math.round(qs / 5000) * 5000 : 120000;
-  const qmode = qp.get("mode") === "atom" ? "atom" as const : "single" as const;
+  const qmode = qp.get("mode") === "atom" ? ("atom" as const) : ("single" as const);
+  const qsrc = qp.get("source");
+  const densitySource: DensitySource =
+    qsrc === "model" || qsrc === "hf" || qsrc === "dirac-fock" ? qsrc : "dirac-fock";
   const e = elementByZ(Z);
   const v = valenceSubshell(e);
   return {
-    ...initialCommon(Z, v.n, v.l, count, qmode, qp.get("adaptive") !== "0"),
+    ...initialCommon(Z, v.n, v.l, count, qmode, densitySource, qp.get("adaptive") !== "0"),
   };
 }
 
-function initialCommon(Z: number, n: number, l: number, count: number, mode: "single" | "atom", adaptiveQuality: boolean): AppState {
+function initialCommon(
+  Z: number,
+  n: number,
+  l: number,
+  count: number,
+  mode: "single" | "atom",
+  densitySource: DensitySource,
+  adaptiveQuality: boolean,
+): AppState {
   const e = elementByZ(Z);
   return {
     Z,
@@ -87,7 +99,7 @@ function initialCommon(Z: number, n: number, l: number, count: number, mode: "si
     allowUnoccupied: true,
     basis: "real",
     model: Z === 1 ? "hydrogenic-exact" : "slater-screened-hydrogenic",
-    densitySource: "model",
+    densitySource,
     count,
     seed: 1337,
     showCurrent: false,

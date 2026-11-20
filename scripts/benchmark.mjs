@@ -10,16 +10,22 @@
  */
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { platform, release, arch } from "node:os";
 
 const PORT = 4179;
 const SWIFTSHADER = process.env.ATOMS_BENCH_GPU !== "hardware";
+const preinstalledShell = "/ms-playwright/chrome-headless-shell-linux64/chrome-headless-shell";
 const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort", "--host", "127.0.0.1"], { stdio: "ignore" });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await wait(3000);
 
 const browser = await chromium.launch({
+  ...(existsSync(preinstalledShell) && !process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+    ? { executablePath: preinstalledShell }
+    : process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+      : {}),
   args: SWIFTSHADER
     ? ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
     : ["--ignore-gpu-blocklist"],

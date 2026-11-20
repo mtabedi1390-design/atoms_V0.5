@@ -3,7 +3,7 @@ import type { ElementRecord } from "@/data/elements";
 import { subshellLabel, SUBSHELL_LETTERS } from "@/physics/hydrogenic";
 import { MODELS, type ModelId } from "@/physics/models";
 import { HF_ATOMS, hfDatasetFor } from "@/science/providers";
-import type { Action, AppState } from "@/state/appState";
+import type { Action, AppState, DensitySource } from "@/state/appState";
 import { PeriodicTable } from "./PeriodicTable";
 import { Panel, Row, Seg, Slider, Toggle } from "./ui";
 
@@ -28,6 +28,9 @@ export function ControlRail({ state, element: e, dispatch, extentPm, layerColors
   const maxN = Math.max(7, ...e.subshells.map((s) => s.n));
   const nOptions = Array.from({ length: maxN }, (_, i) => i + 1);
   const occupied = new Set(e.subshells.map((s) => s.label));
+  const hf = hfDatasetFor(e.Z);
+  const isTotalDensityOnly = state.mode === "atom" && state.densitySource !== "model";
+
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       <Panel title="Element">
@@ -40,7 +43,7 @@ export function ControlRail({ state, element: e, dispatch, extentPm, layerColors
           onChange={(mode) => dispatch({ type: "set", patch: { mode } })}
           options={[
             { v: "single", label: "Single orbital ψₙₗₘ" },
-            { v: "atom", label: "Full-atom density Σnᵢ|ψᵢ|²" },
+            { v: "atom", label: "Full-atom density" },
           ]}
         />
         <div className="mt-2">
@@ -53,21 +56,45 @@ export function ControlRail({ state, element: e, dispatch, extentPm, layerColors
             ]}
           />
         </div>
+        {e.isOpenShell && (
+          <p className="mt-1.5 rounded-sm border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[10px] leading-snug text-zinc-400">
+            <span className="font-semibold text-zinc-200">Open-shell ({e.groundTerm.value ?? "term n/a"})</span>:{" "}
+            {state.mode === "atom"
+              ? "Full-atom view shows a spherical / configuration average over open-shell occupations, not a unique oriented magnetic state."
+              : "Single-orbital mode inspects an independent-electron basis orbital (n,l,m), not a correlated many-electron term."}
+          </p>
+        )}
       </Panel>
 
       <Panel title="Full-atom density source">
         <Seg
           value={state.densitySource}
-          onChange={(densitySource) => dispatch({ type: "set", patch: { densitySource } })}
+          onChange={(densitySource) => dispatch({ type: "set", patch: { densitySource: densitySource as DensitySource } })}
           options={[
-            { v: "model", label: "Model Σ Nᵢ|Rᵢ|²/4π" },
-            { v: "hf", label: "PySCF HF (offline)", disabled: !hfDatasetFor(e.Z), title: hfDatasetFor(e.Z) ? "Bundled RHF/ROHF radial density" : `No HF dataset for ${e.symbol}. Available Z: ${HF_ATOMS.join(", ")}` },
+            {
+              v: "dirac-fock",
+              label: "Dirac–Fock (Z=1–118)",
+              title: "Lobato et al. (2026) relativistic B-spline Dirac–Fock spherical density (all 118 elements, Apache-2.0)",
+            },
+            {
+              v: "hf",
+              label: "PySCF HF (offline)",
+              disabled: !hf,
+              title: hf ? "Bundled non-relativistic RHF/ROHF radial density" : `No HF dataset for ${e.symbol}. Available Z: ${HF_ATOMS.join(", ")}`,
+            },
+            {
+              v: "model",
+              label: "Slater subshells",
+              title: "Qualitative configuration-average Σ Nᵢ|Rᵢ|²/4π using browser Slater screening",
+            },
           ]}
         />
         <p className="mt-1 text-[10px] leading-snug text-zinc-500">
-          {hfDatasetFor(e.Z)
-            ? `Bundled ${hfDatasetFor(e.Z)!.method}/${hfDatasetFor(e.Z)!.basis}: ${hfDatasetFor(e.Z)!.term}, SCF converged in ${hfDatasetFor(e.Z)!.scf.cycles} cycles. Basis-set-limited HF (ΔE = ${hfDatasetFor(e.Z)!.basisError_hartree.toExponential(1)} Ha vs numerical HF limit); no correlation, non-relativistic.`
-            : `Offline HF data exists only for H, He, C, N, O, Ne (Z=${HF_ATOMS.join(", ")}). Other elements use the visible Slater estimate; no heavy-atom MCDHF was run (GRASP not installed).`}
+          {state.densitySource === "dirac-fock"
+            ? `Lobato et al. (2026) relativistic B-spline Dirac–Fock (atomx, finite nucleus, spherical average) for Z=${e.Z}. Total density ρ(r) only — no subshell R_nl(r) orbitals or wavefunction phase.`
+            : state.densitySource === "hf" && hf
+              ? `Bundled ${hf.method}/${hf.basis}: ${hf.term}, SCF converged in ${hf.scf.cycles} cycles. Basis-set-limited HF (ΔE = ${hf.basisError_hartree.toExponential(1)} Ha vs numerical HF limit); no correlation, non-relativistic.`
+              : `Qualitative independent-electron configuration average Σ Nᵢ|Rᵢ|²/4π (${e.Z === 1 ? "exact 1s" : "Slater Z_eff"}). Not relativistic and not SCF. PySCF HF bundled only for Z=${HF_ATOMS.join(", ")}.`}
         </p>
       </Panel>
 
@@ -110,7 +137,14 @@ export function ControlRail({ state, element: e, dispatch, extentPm, layerColors
         />
         <Toggle label="Allow unoccupied (n,l) in single mode" checked={state.allowUnoccupied} onChange={(v) => dispatch({ type: "set", patch: { allowUnoccupied: v } })} />
         <div className="mt-2">
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-500">Occupied subshells {state.mode === "atom" ? "(visibility · opacity)" : "(click to select)"}</div>
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-500">
+            Occupied subshells {state.mode === "atom" && state.densitySource === "model" ? "(visibility · opacity)" : "(click to inspect orbital)"}
+          </div>
+          {isTotalDensityOnly && (
+            <p className="mb-1 text-[10px] text-zinc-500">
+              Total-density providers do not resolve individual subshells. Switch source to <span className="text-zinc-300">Slater subshells</span> to toggle per-subshell layers.
+            </p>
+          )}
           <div className="grid grid-cols-1 gap-0.5">
             {e.subshells.map((s) => {
               const L = state.layers[s.label] ?? { visible: true, opacity: 1 };
@@ -120,7 +154,7 @@ export function ControlRail({ state, element: e, dispatch, extentPm, layerColors
                   <i className="h-2 w-2 shrink-0 rounded-sm" style={{ background: layerColors[s.label] ?? "#888" }} />
                   <button onClick={() => dispatch({ type: "selectSubshell", n: s.n, l: s.l })} className={`w-10 text-left font-mono ${active ? "text-amber-300" : "text-zinc-200"}`}>{s.label}</button>
                   <span className="w-8 font-mono text-zinc-500">{s.occupancy}e⁻</span>
-                  {state.mode === "atom" && (
+                  {state.mode === "atom" && state.densitySource === "model" && (
                     <>
                       <input type="checkbox" aria-label={`visibility ${s.label}`} checked={L.visible} onChange={(ev) => dispatch({ type: "layer", key: s.label, patch: { visible: ev.target.checked } })} className="accent-amber-400" />
                       <input type="range" aria-label={`opacity ${s.label}`} min={0.05} max={1} step={0.05} value={L.opacity} onChange={(ev) => dispatch({ type: "layer", key: s.label, patch: { opacity: Number(ev.target.value) } })} className="h-1 flex-1 accent-zinc-400" />
@@ -141,13 +175,13 @@ export function ControlRail({ state, element: e, dispatch, extentPm, layerColors
 
       <Panel title="Rendering">
         <Seg
-          value={r.colorMode}
+          value={isTotalDensityOnly && r.colorMode !== "density" ? "density" : r.colorMode}
           onChange={(colorMode) => dispatch({ type: "render", patch: { colorMode } })}
           options={[
-            { v: "density", label: "|ψ|²" },
-            { v: "phase-real", label: "sign ψ", disabled: state.basis !== "real" || state.mode === "atom", title: "Real basis only: orange = ψ>0, blue = ψ<0" },
-            { v: "phase-complex", label: "arg ψ", disabled: state.basis !== "complex" || state.mode === "atom", title: "Complex basis only: hue = phase angle" },
-            { v: "layer", label: "subshell", disabled: state.mode !== "atom" },
+            { v: "density", label: "|ψ|² / ρ" },
+            { v: "phase-real", label: "sign ψ", disabled: state.basis !== "real" || state.mode === "atom", title: "Single-orbital real basis only: orange = ψ>0, blue = ψ<0" },
+            { v: "phase-complex", label: "arg ψ", disabled: state.basis !== "complex" || state.mode === "atom", title: "Single-orbital complex basis only: hue = phase angle" },
+            { v: "layer", label: "subshell", disabled: state.mode !== "atom" || state.densitySource !== "model", title: "Available in Full-atom Slater subshells mode" },
           ]}
         />
         <Slider label="Point size" value={r.pointSize} min={0.5} max={6} step={0.1} onChange={(pointSize) => dispatch({ type: "render", patch: { pointSize } })} />

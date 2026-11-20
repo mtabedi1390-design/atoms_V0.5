@@ -225,6 +225,7 @@ export class OrbitalScene {
     L.geometry.setAttribute("aPhase", new THREE.BufferAttribute(data.phase, 1));
     L.geometry.setDrawRange(0, n);
     L.count = n;
+    L.ownMax = data.maxDensity;
     L.opacity = opacity;
     L.visible = visible;
     (L.material.uniforms.uLayerColor.value as THREE.Color).set(data.color);
