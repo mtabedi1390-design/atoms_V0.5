@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+:root { color-scheme: dark; }
+html, body, #root { height: 100%; margin: 0; background: #000; }
+.font-mono, code, kbd { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+* { scrollbar-width: thin; scrollbar-color: #3f3f46 transparent; }
+input[type="range"] { background: transparent; }

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+build-core-*/
+test-results/
+playwright-report/
+__pycache__/
+*.pyc
+.vscode/
