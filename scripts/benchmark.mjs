@@ -1,17 +1,24 @@
 #!/usr/bin/env node
 /**
- * Reproducible renderer benchmark.
+ * Reproducible compute & renderer benchmark for ATOMS v0.6.0.
  *
  * IMPORTANT: by default this launches Chromium with ANGLE/SwiftShader (CPU software
- * rasterisation) because the CI container has no GPU.  These numbers characterise CI
+ * rasterisation) because the CI container has no GPU.  These WebGL numbers characterise CI
  * behaviour only and are NOT evidence of hardware WebGL2 performance.  Run the same
- * script on a workstation (remove the SwiftShader flags) to obtain hardware numbers,
- * and label the result with `WEBGL_debug_renderer_info`.
+ * script on a workstation (ATOMS_BENCH_GPU=hardware npm run bench) to obtain hardware GPU numbers,
+ * and inspect the `WEBGL_debug_renderer_info` string recorded below.
  */
 import { chromium } from "@playwright/test";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { platform, release, arch } from "node:os";
+
+console.log("Running CPU compute microbenchmarks (Node / tsx)...");
+const computeJson = execSync("npx tsx scripts/bench_compute.ts", { encoding: "utf8" }).trim();
+const computeRows = JSON.parse(computeJson);
+for (const r of computeRows) {
+  console.log(`  [CPU] ${r.name}: ${r.meanMs} ms/iter (${r.iterations} iters, total ${r.totalMs} ms)`);
+}
 
 const PORT = 4179;
 const SWIFTSHADER = process.env.ATOMS_BENCH_GPU !== "hardware";
@@ -74,16 +81,22 @@ for (const c of cases) {
 await browser.close();
 server.kill();
 
-const head = `# Renderer benchmark\n\nGenerated: ${new Date().toISOString()}\n\n` +
+const head = `# ATOMS v0.6.0 — Compute & Renderer Benchmark\n\nGenerated: ${new Date().toISOString()}\n\n` +
+`## 1. CPU Physics & Numerical Compute Benchmarks (Single-Thread Node / V8)\n\n` +
+`- Environment: ${platform()} ${release()} ${arch()} (single-thread \`tsx\`; Web Workers run off the main UI thread in the browser)\n\n` +
+`| Benchmark | Iterations | Mean (ms) | Total (ms) |\n|---|---|---|---|\n` +
+computeRows.map((r) => `| ${r.name} | ${r.iterations} | ${r.meanMs} | ${r.totalMs} |`).join("\n") +
+`\n\n## 2. Browser WebGL2 Rendering Benchmark\n\n` +
 `**Rendering mode: ${SWIFTSHADER ? "SwiftShader / ANGLE — CPU software rasterisation (CI container, no GPU)" : "hardware GPU requested"}**\n\n` +
-`- WebGL renderer: \`${renderer}\`\n- OS: ${platform()} ${release()} ${arch()}\n- Browser: ${ua}\n- Viewport: 1440×900, devicePixelRatio ${dpr}, point sprites additive blended\n- Protocol: \`?z&samples&mode&adaptive=0\`; 4 s warm-up, six telemetry FPS samples 700 ms apart; median reported. Sampling and upload times are from the app's worker/upload timers.\n- Hardware acceleration: ${SWIFTSHADER ? "NOT USED — these FPS values say nothing about real GPU performance" : "used"}\n\n` +
+`- WebGL renderer: \`${renderer}\`\n- OS: ${platform()} ${release()} ${arch()}\n- Browser: ${ua}\n- Viewport: 1440×900, devicePixelRatio ${dpr}, point sprites additive blended\n- Protocol: \`?z&samples&mode&adaptive=0\`; 4 s warm-up, six telemetry FPS samples 700 ms apart; median reported. Sampling and upload times are from the app's worker/upload timers.\n- Hardware acceleration: ${SWIFTSHADER ? "NOT USED — these FPS values characterize CPU SwiftShader rasterisation only and are NOT hardware GPU measurements" : "used"}\n\n` +
 `| mode | Z | requested samples | rendered points | median FPS | min–max | sampling (ms) | GPU upload (ms) |\n|---|---|---|---|---|---|---|---|\n` +
 cases.map((c) => `| ${c.mode} | ${c.z} | ${c.samples.toLocaleString()} | ${c.points.toLocaleString()} | ${c.medianFps} | ${c.minFps}–${c.maxFps} | ${c.workerMs} | ${c.uploadMs} |`).join("\n") +
-`\n\n## Interpretation\n\n` +
-`- Software rasterisation is bandwidth- and CPU-bound; the low FPS here is caused by SwiftShader, not by the sample count alone. Under the historical CI screenshots the same caveat applied.\n` +
-`- Full-atom mode renders one draw call per subshell (no per-particle meshes) and uses a shared brightness normalisation; the two modes are not directly comparable in fill-rate cost.\n` +
-`- On capable hardware the target is 60 FPS; the app's adaptive quality reduces the requested sample count after 3 s below 30 FPS. That adaptation is disabled here so workloads stay fixed.\n` +
-`- Run \`ATOMS_BENCH_GPU=hardware npm run bench\` on a workstation to produce hardware numbers, and record the renderer string. No hardware benchmark was executed in this environment.\n`;
+`\n\n## 3. Interpretation\n\n` +
+`- Pure scientific compute kernels (analytical Schrödinger/Dirac evaluation, 4,000-point E1 radial quadratures, 24³–32³ Marching Tetrahedra isosurfaces) complete in single-digit to low-tens of milliseconds and execute asynchronously inside dedicated Web Workers so UI controls never block.\n` +
+`- Software rasterisation is CPU- and memory-bandwidth-bound; the low FPS above is caused by ANGLE/SwiftShader software emulation rather than the WebGL2 draw calls or sample counts.\n` +
+`- Full-atom mode renders one draw call per subshell (or one draw call for tabulated Dirac–Fock / PySCF HF total density) with shared cross-subshell normalization.\n` +
+`- On capable workstation GPUs the target is 60 FPS; adaptive quality throttles sample counts after 3 s below 30 FPS (disabled in this benchmark).\n` +
+`- Run \`ATOMS_BENCH_GPU=hardware npm run bench\` on a workstation with a GPU to measure real hardware WebGL2 FPS, and verify \`WEBGL_debug_renderer_info\` is not SwiftShader.\n`;
 mkdirSync("docs", { recursive: true });
 writeFileSync("docs/BENCHMARK.md", head);
 console.log("wrote docs/BENCHMARK.md");

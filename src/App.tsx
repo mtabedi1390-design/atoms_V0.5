@@ -3,17 +3,34 @@ import { cn } from "@/utils/cn";
 import { ControlRail } from "@/components/ControlRail";
 import { EnergyDiagram } from "@/components/EnergyDiagram";
 import { Inspector } from "@/components/Inspector";
-import { RadialPlot, type TotalRadialDensityView } from "@/components/RadialPlot";
+import { RadialPlot, type DiracRadialView, type TotalRadialDensityView } from "@/components/RadialPlot";
 import { TelemetryBar } from "@/components/TelemetryBar";
 import { Panel } from "@/components/ui";
+import { WorkspaceNav } from "@/components/laboratory/WorkspaceNav";
+import { AtomicSystemsWorkspace } from "@/components/laboratory/AtomicSystemsWorkspace";
+import { QuantumStatesWorkspace } from "@/components/laboratory/QuantumStatesWorkspace";
+import { EnergyStructureWorkspace } from "@/components/laboratory/EnergyStructureWorkspace";
+import { TransitionsWorkspace } from "@/components/laboratory/TransitionsWorkspace";
+import { SpectroscopyWorkspace } from "@/components/laboratory/SpectroscopyWorkspace";
+import { AnalysisWorkspace } from "@/components/laboratory/AnalysisWorkspace";
+import { ExperimentHistoryWorkspace } from "@/components/laboratory/ExperimentHistoryWorkspace";
+import { useAtomsLaboratory } from "@/app/useAtomsLaboratory";
 import { elementByZ } from "@/data/elements";
+import { lFromKappa } from "@/domain/quantum";
+import type { FieldQuantity } from "@/numerics/isosurface/marchingTetrahedra";
 import { diracFockRadialGrid } from "@/physics/diracFock";
-import { BOHR_PM, radialExtent } from "@/physics/hydrogenic";
+import { BOHR_PM, SUBSHELL_LETTERS, radialExtent } from "@/physics/hydrogenic";
 import { effectiveZ } from "@/physics/models";
+import {
+  checkDiracCoulombDomain,
+  diracRadialPQ,
+  integrateDiracExpectationValues,
+} from "@/physics/providers/dirac";
 import { hfDatasetFor, selectProvider } from "@/science/providers";
 import { OrbitalScene, type SceneStats } from "@/render/OrbitalScene";
 import { SamplerClient } from "@/sampling/client";
 import type { SamplingParams } from "@/sampling/sampler";
+import { VisualizationWorkerClient } from "@/workers/visualizationClient";
 import { activeSubshell, initialState, reducer } from "@/state/appState";
 
 const LAYER_PALETTE = ["#f59e0b", "#38bdf8", "#a78bfa", "#34d399", "#fb7185", "#facc15", "#60a5fa", "#f472b6", "#4ade80", "#fbbf24", "#22d3ee", "#c084fc", "#fb923c", "#a3e635", "#e879f9", "#2dd4bf", "#f87171", "#818cf8", "#fde047"];
@@ -31,11 +48,15 @@ export default function App() {
   const element = useMemo(() => elementByZ(state.Z), [state.Z]);
   const sub = useMemo(() => activeSubshell(state, element), [state, element]);
 
+  const lab = useAtomsLaboratory(state.Z, state.n, state.l, state.m, state.basis);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<OrbitalScene | null>(null);
   const clientRef = useRef<SamplerClient | null>(null);
+  const visClientRef = useRef<VisualizationWorkerClient | null>(null);
   const [glError, setGlError] = useState<string | null>(null);
   const [workerError, setWorkerError] = useState<string | null>(null);
+  const [isoStatus, setIsoStatus] = useState<{ triangles: number; ms: number } | null>(null);
   const [stats, setStats] = useState<SceneStats>({ fps: 0, drawCalls: 0, points: 0, gpuUploadMs: 0 });
   const [sampleMs, setSampleMs] = useState<number | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -52,6 +73,12 @@ export default function App() {
   const useDF = state.mode === "atom" && state.densitySource === "dirac-fock";
   const useHF = state.mode === "atom" && state.densitySource === "hf" && hfDataset !== null;
   const isTotalDensityOnly = useDF || useHF;
+  const useDiracWorkbench =
+    state.mode === "single" &&
+    lab.config.theoryMode === "dirac" &&
+    (lab.atomicSystem.nuclearModel.kind === "point-infinite-mass" ||
+      lab.atomicSystem.nuclearModel.kind === "point-finite-mass") &&
+    checkDiracCoulombDomain(state.Z, lab.diracState.kappa).valid;
   const providerSelection = useMemo(() => selectProvider({ Z: state.Z, observable: "electron-density", accuracy: "quantitative" }), [state.Z]);
   const peaks = useRef(new Map<string, number>());
   const electronTotals = useRef(new Map<string, number>());
@@ -81,6 +108,38 @@ export default function App() {
     }
     return null;
   }, [useDF, useHF, dfGrid, hfDataset, element.symbol, element.Z]);
+
+  const workbenchDiracRadial: DiracRadialView | null = useMemo(() => {
+    if (!useDiracWorkbench) return null;
+    const ds = lab.diracState;
+    const redMass = lab.atomicSystem.reducedMassRatio;
+    const ex = integrateDiracExpectationValues(ds.n, ds.kappa, state.Z, redMass, undefined, 1600);
+    const l = lFromKappa(ds.kappa);
+    const aScale = 1 / redMass;
+    const rMax = Math.max(((3 * ds.n * ds.n - l * (l + 1)) * aScale) / (2 * state.Z) * 5, (10 * ds.n * aScale) / state.Z);
+    const rBohr: number[] = [];
+    const P_nkappa: number[] = [];
+    const Q_nkappa: number[] = [];
+    const radialProbability: number[] = [];
+    for (let i = 0; i < 200; i++) {
+      const r = (i / 199) * rMax;
+      const pq = diracRadialPQ(ds.n, ds.kappa, r, state.Z, redMass);
+      rBohr.push(r);
+      P_nkappa.push(pq.P);
+      Q_nkappa.push(pq.Q);
+      radialProbability.push(pq.P * pq.P + pq.Q * pq.Q);
+    }
+    return {
+      label: `${ds.n}${SUBSHELL_LETTERS[l] ?? `l${l}`}_${Math.round(2 * ds.j)}/2`,
+      rBohr,
+      P_nkappa,
+      Q_nkappa,
+      radialProbability,
+      integratedNorm: ex.totalSpinorNorm,
+      smallFraction: ex.smallComponentNorm,
+      meanR_a0: ex.meanR_a0,
+    };
+  }, [useDiracWorkbench, lab.diracState, lab.atomicSystem.reducedMassRatio, state.Z]);
 
   // ---- layer specification derived from state ----
   const specs: LayerSpec[] = useMemo(() => {
@@ -134,12 +193,15 @@ export default function App() {
 
   const extentPm = useMemo(() => {
     if (useDF) {
-      // Visual framing covering 99.9% of total density extent (capped sensibly)
       return Math.min(dfGrid.rMaxBohr, 18) * BOHR_PM;
     }
     if (useHF && hfDataset) return Math.min(hfDataset.density.rBohr[hfDataset.density.rBohr.length - 1], 18) * BOHR_PM;
+    if (useDiracWorkbench) {
+      const l = lFromKappa(lab.diracState.kappa);
+      return radialExtent(lab.diracState.n, l, state.Z, 1 / lab.atomicSystem.reducedMassRatio) * BOHR_PM;
+    }
     return Math.max(...specs.map((s) => radialExtent(s.params.n, s.params.l, s.params.zeff))) * BOHR_PM;
-  }, [specs, useDF, useHF, dfGrid, hfDataset]);
+  }, [specs, useDF, useHF, dfGrid, hfDataset, useDiracWorkbench, lab.diracState, lab.atomicSystem.reducedMassRatio, state.Z]);
 
   // Effective render settings enforcing honest colorMode boundaries
   const effectiveRender = useMemo(() => {
@@ -171,30 +233,47 @@ export default function App() {
     const client = new SamplerClient();
     client.onFatal(setWorkerError);
     clientRef.current = client;
+    const visClient = new VisualizationWorkerClient();
+    visClientRef.current = visClient;
     const ro = new ResizeObserver(() => {
-      const { width, height } = canvas.parentElement!.getBoundingClientRect();
-      scene.resize(width, height);
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      const { width, height } = parent.getBoundingClientRect();
+      if (width > 0 && height > 0) scene.resize(width, height);
     });
     ro.observe(canvas.parentElement!);
     const { width, height } = canvas.parentElement!.getBoundingClientRect();
-    scene.resize(width, height);
+    if (width > 0 && height > 0) scene.resize(width, height);
     return () => {
       ro.disconnect();
       client.dispose();
+      visClient.dispose();
       scene.dispose();
       sceneRef.current = null;
       clientRef.current = null;
+      visClientRef.current = null;
       lastParams.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    if (lab.config.workspace === "workbench") {
+      const canvas = canvasRef.current;
+      const scene = sceneRef.current;
+      if (canvas?.parentElement && scene) {
+        const { width, height } = canvas.parentElement.getBoundingClientRect();
+        if (width > 0 && height > 0) scene.resize(width, height);
+      }
+    }
+  }, [lab.config.workspace]);
+
+  useEffect(() => {
     sceneRef.current?.applySettings(effectiveRender);
   }, [effectiveRender]);
 
-  // frame camera when element, mode, or density source changes
-  const frameKey = `${state.Z}|${state.mode}|${state.model}|${state.densitySource}`;
+  // frame camera when element, mode, theoryMode, or density source changes
+  const frameKey = `${state.Z}|${state.mode}|${state.model}|${state.densitySource}|${useDiracWorkbench}`;
   useEffect(() => {
     sceneRef.current?.setExtent(extentPm);
     sceneRef.current?.frame(extentPm);
@@ -210,10 +289,51 @@ export default function App() {
     }
   }, [extentPm]);
 
-  // ---- sampling requests ----
+  // ---- sampling requests (Schrodinger / Total-density OR Dirac 4-spinor) ----
   useEffect(() => {
-    const scene = sceneRef.current, client = clientRef.current;
+    const scene = sceneRef.current, client = clientRef.current, visClient = visClientRef.current;
     if (!scene || !client) return;
+
+    if (useDiracWorkbench && visClient) {
+      const keep = new Set(["single"]);
+      scene.removeLayersExcept(keep);
+      client.cancelAllExcept(new Set());
+      lastParams.current.clear();
+      scene.setSharedMax(null);
+      setProgress(0.2);
+      visClient.sampleDirac(
+        {
+          state: lab.diracState,
+          Z: state.Z,
+          reducedMassRatio: lab.atomicSystem.reducedMassRatio,
+          count: state.count,
+          seed: state.seed,
+          componentView: lab.config.diracComponentView,
+        },
+        (cloud, elapsedMs) => {
+          setProgress(1);
+          setSampleMs(elapsedMs);
+          setWorkerError(null);
+          scene.setLayer(
+            "single",
+            {
+              positionsBohr: cloud.positionsBohr,
+              density: cloud.density,
+              phase: cloud.phase,
+              maxDensity: cloud.maxDensity,
+              color: "#38bdf8",
+            },
+            1,
+            true,
+          );
+          setElectrons(1);
+          if (scene.shaderError) setGlError(`Shader error: ${scene.shaderError}`);
+        },
+        (msg) => setWorkerError(msg),
+      );
+      return;
+    }
+
     const keep = new Set(specs.map((s) => s.key));
     scene.removeLayersExcept(keep);
     client.cancelAllExcept(keep);
@@ -262,16 +382,86 @@ export default function App() {
     if (state.mode === "atom" && electronTotals.current.size === specs.length) {
       setElectrons([...electronTotals.current.values()].reduce((a, b) => a + b, 0));
     }
-  }, [specs, state.mode]);
+  }, [
+    specs,
+    state.mode,
+    useDiracWorkbench,
+    lab.diracState,
+    lab.atomicSystem.reducedMassRatio,
+    lab.config.diracComponentView,
+    state.Z,
+    state.count,
+    state.seed,
+  ]);
+
+  // ---- off-thread 3D Marching Tetrahedra Isosurface overlay ----
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const visClient = visClientRef.current;
+    if (!scene) return;
+    if (!lab.config.showIsosurface || state.mode !== "single" || !visClient) {
+      scene.clearIsosurfaces();
+      setIsoStatus(null);
+      return;
+    }
+
+    const zeffSingle = effectiveZ(state.model, element, sub);
+    const quantity: FieldQuantity = useDiracWorkbench
+      ? lab.config.diracComponentView === "large"
+        ? "dirac-large-density"
+        : lab.config.diracComponentView === "small"
+          ? "dirac-small-density"
+          : "dirac-total-density"
+      : state.basis === "real" && effectiveRender.colorMode === "phase-real"
+        ? "wavefunction-signed"
+        : "density";
+
+    const extentBohr = extentPm / BOHR_PM;
+    visClient.extractIsosurface(
+      {
+        state: useDiracWorkbench ? lab.diracState : lab.nrState,
+        Z: useDiracWorkbench ? state.Z : zeffSingle,
+        reducedMassRatio: useDiracWorkbench ? lab.atomicSystem.reducedMassRatio : 1,
+        quantity,
+        isoFraction: lab.config.isoFraction,
+        resolution: lab.config.isoResolution,
+        extentBohr,
+      },
+      (surface, elapsedMs) => {
+        scene.setIsosurfaceMeshes(surface.meshes, { wireframe: lab.config.isoWireframe, opacity: 0.52 });
+        const triangles = surface.meshes.reduce((acc, m) => acc + m.triangleCount, 0);
+        setIsoStatus({ triangles, ms: elapsedMs });
+      },
+      (msg) => setWorkerError(msg),
+    );
+  }, [
+    lab.config.showIsosurface,
+    lab.config.isoFraction,
+    lab.config.isoResolution,
+    lab.config.isoWireframe,
+    lab.config.diracComponentView,
+    state.mode,
+    state.model,
+    state.basis,
+    state.Z,
+    effectiveRender.colorMode,
+    useDiracWorkbench,
+    lab.diracState,
+    lab.nrState,
+    lab.atomicSystem.reducedMassRatio,
+    element,
+    sub,
+    extentPm,
+  ]);
 
   // ---- probability current field ----
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    const show = state.showCurrent && state.mode === "single" && state.basis === "complex" && state.m !== 0;
+    const show = state.showCurrent && state.mode === "single" && !useDiracWorkbench && state.basis === "complex" && state.m !== 0;
     const zeff = effectiveZ(state.model, element, sub);
     scene.setCurrentField(show ? { q: { n: state.n, l: state.l, m: state.m }, zeff, rMaxBohr: radialExtent(state.n, state.l, zeff) * 0.6 } : null);
-  }, [state.showCurrent, state.mode, state.basis, state.n, state.l, state.m, state.model, element, sub]);
+  }, [state.showCurrent, state.mode, state.basis, state.n, state.l, state.m, state.model, element, sub, useDiracWorkbench]);
 
   // ---- adaptive quality ----
   useEffect(() => {
@@ -294,9 +484,13 @@ export default function App() {
     ? "Dirac–Fock (Lobato 2026)"
     : useHF
       ? "PySCF HF (bundled)"
-      : state.model === "hydrogenic-exact"
-        ? "exact hydrogenic"
-        : "Slater estimate";
+      : useDiracWorkbench
+        ? "Dirac–Coulomb 4-spinor"
+        : state.model === "hydrogenic-exact"
+          ? "exact hydrogenic"
+          : "Slater estimate";
+
+  const activeExecCount = lab.executions.filter((e) => e.status === "queued" || e.status === "running").length;
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-black text-zinc-200" style={{ fontFamily: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif" }}>
@@ -316,9 +510,27 @@ export default function App() {
         progress={progress}
         workerError={workerError}
       />
-      <div className="flex min-h-0 flex-1">
-        <aside className={cn("w-[340px] shrink-0 border-r border-zinc-800 bg-zinc-950 lg:block", mobilePanel === "controls" ? "fixed inset-y-12 left-0 z-20 block w-[88vw] max-w-[340px]" : "hidden")}>
-          <ControlRail state={state} element={element} dispatch={dispatch} extentPm={extentPm} layerColors={layerColors} onResetCamera={resetCamera} />
+
+      <WorkspaceNav
+        active={lab.config.workspace}
+        onSelect={(workspace) => lab.patchConfig({ workspace })}
+        activeCount={activeExecCount}
+      />
+
+      {/* Workbench keeps its live WebGL2 canvas mounted without losing scene state across workspace switches */}
+      <div className={lab.config.workspace === "workbench" ? "flex min-h-0 flex-1" : "hidden"}>
+        <aside className={cn("w-[340px] shrink-0 border-r border-zinc-800 bg-zinc-950 lg:block", mobilePanel === "controls" ? "fixed inset-y-20 left-0 z-20 block w-[88vw] max-w-[340px]" : "hidden")}>
+          <ControlRail
+            state={state}
+            element={element}
+            dispatch={dispatch}
+            extentPm={extentPm}
+            layerColors={layerColors}
+            onResetCamera={resetCamera}
+            labConfig={lab.config}
+            onPatchLab={lab.patchConfig}
+            electronCount={lab.atomicSystem.N}
+          />
         </aside>
         <main className="relative min-w-0 flex-1 bg-black">
           <div className="absolute right-2 top-2 z-20 flex gap-1 lg:hidden">
@@ -338,19 +550,27 @@ export default function App() {
           )}
           <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1 text-[10px] text-zinc-400">
             <ScaleBar extentPm={extentPm} />
-            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.5.0</span>
+            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.6.0</span>
             {effectiveRender.colorMode === "phase-real" && <span><span className="text-orange-400">■ ψ &gt; 0</span> <span className="text-blue-400">■ ψ &lt; 0</span> — sign of the real wavefunction (not density)</span>}
             {effectiveRender.colorMode === "phase-complex" && <span>hue = arg ψ ∈ (−π, π] — complex phase e<sup>imφ</sup>; brightness ∝ log|ψ|²</span>}
             {effectiveRender.colorMode === "density" && <span>colour/brightness ∝ log-relative density (black→violet→red→yellow→white)</span>}
             {state.mode === "atom" && !isTotalDensityOnly && <span>independent-electron density ρ = Σ Nᵢ|Rᵢ|²/(4π) (configuration-average, Unsöld). Brightness uses a <b>shared</b> cross-subshell normalisation; point count ∝ occupancy. Not a correlated many-electron density.</span>}
             {useDF && <span className="text-sky-300">Lobato et al. (2026) relativistic B-spline Dirac–Fock total spherical density (finite nucleus, spherical average). Subshell orbitals &amp; phase are not resolved.</span>}
             {useHF && <span className="text-sky-300">imported PySCF {hfDataset?.method}/{hfDataset?.basis} spherically averaged HF density (basis-set-limited, non-relativistic). Not experimental.</span>}
+            {useDiracWorkbench && <span className="text-sky-300">Dirac–Coulomb 4-spinor sampling ({lab.config.diracComponentView} view): P and Q are coupled spinor components of one eigenstate, not separate orbitals.</span>}
+            {lab.config.showIsosurface && (
+              <span className="text-amber-300">
+                3D Marching Tetrahedra isosurface at {(lab.config.isoFraction * 100).toFixed(0)}% max ({lab.config.isoResolution}³ grid)
+                {isoStatus ? ` · ${isoStatus.triangles.toLocaleString()} triangles extracted in ${isoStatus.ms.toFixed(0)} ms` : " · extracting in worker..."}
+                .
+              </span>
+            )}
             {state.mode === "atom" && electrons !== null && <span>∫ρ dV = {electrons.toFixed(3)} e (occupancy/tabulated check)</span>}
             {currentNote && <span className="text-amber-300">j = (ħ/m) Im(ψ*∇ψ) vanishes identically for real stationary orbitals, m = 0, and total-density views; select single-orbital complex basis with m ≠ 0.</span>}
             {state.showCurrent && !currentNote && <span className="text-emerald-300">green segments: probability-current density j ∝ m|ψ|²/(r sinθ) φ̂ (azimuthal circulation about z)</span>}
           </div>
         </main>
-        <aside className={cn("w-[360px] shrink-0 flex-col border-l border-zinc-800 bg-zinc-950 lg:flex", mobilePanel === "analysis" ? "fixed inset-y-12 right-0 z-20 flex w-[92vw] max-w-[360px]" : "hidden")}>
+        <aside className={cn("w-[360px] shrink-0 flex-col border-l border-zinc-800 bg-zinc-950 lg:flex", mobilePanel === "analysis" ? "fixed inset-y-20 right-0 z-20 flex w-[92vw] max-w-[360px]" : "hidden")}>
           <div className="flex border-b border-zinc-800 text-[11px]">
             {(["radial", "energy", "inspector"] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)} className={`flex-1 py-1.5 uppercase tracking-wider ${tab === t ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
@@ -360,8 +580,16 @@ export default function App() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {tab === "radial" && (
-              <Panel title={totalRadialView ? "Total radial density 4πr²ρ(r)" : "Radial probability distribution"}>
-                <RadialPlot mode={state.mode} n={state.n} l={state.l} zeff={zeffActive} model={state.model} totalDensity={totalRadialView} />
+              <Panel title={totalRadialView ? "Total radial density 4πr²ρ(r)" : workbenchDiracRadial ? "Dirac spinor radial components" : "Radial probability distribution"}>
+                <RadialPlot
+                  mode={workbenchDiracRadial ? "dirac" : state.mode}
+                  n={state.n}
+                  l={state.l}
+                  zeff={zeffActive}
+                  model={state.model}
+                  totalDensity={totalRadialView}
+                  diracView={workbenchDiracRadial}
+                />
               </Panel>
             )}
             {tab === "energy" && (
@@ -377,12 +605,128 @@ export default function App() {
           </div>
         </aside>
       </div>
+
+      {lab.config.workspace === "atomic-systems" && (
+        <div className="min-h-0 flex-1">
+          <AtomicSystemsWorkspace
+            element={element}
+            system={lab.atomicSystem}
+            activeState={lab.activeQuantumState}
+            isotopes={lab.isotopes}
+            activeIsotope={lab.activeIsotope}
+            config={lab.config}
+            assessments={lab.providerAssessments}
+            onSelectZ={(Z) => dispatch({ type: "selectElement", Z })}
+            onPatchConfig={lab.patchConfig}
+            onRunSingleExperiment={() => {
+              void lab.runSingleStateExperiment();
+              lab.patchConfig({ workspace: "experiment-history" });
+            }}
+          />
+        </div>
+      )}
+
+      {lab.config.workspace === "quantum-states" && (
+        <div className="min-h-0 flex-1">
+          <QuantumStatesWorkspace
+            system={lab.atomicSystem}
+            config={lab.config}
+            nrState={lab.nrState}
+            diracState={lab.diracState}
+            onPatchConfig={lab.patchConfig}
+            onSelectNR={(n, l, m, basis) => {
+              dispatch({ type: "selectSubshell", n, l });
+              dispatch({ type: "setM", m });
+              if (basis) dispatch({ type: "set", patch: { basis } });
+            }}
+            onRunExperiment={() => {
+              void lab.runSingleStateExperiment();
+              lab.patchConfig({ workspace: "experiment-history" });
+            }}
+          />
+        </div>
+      )}
+
+      {lab.config.workspace === "energy-structure" && (
+        <div className="min-h-0 flex-1">
+          <EnergyStructureWorkspace element={element} system={lab.atomicSystem} />
+        </div>
+      )}
+
+      {lab.config.workspace === "transitions" && (
+        <div className="min-h-0 flex-1">
+          <TransitionsWorkspace
+            system={lab.atomicSystem}
+            onRunTransitionExperiment={(initial, final, providerId, title) => {
+              void lab.runTransitionExperiment(initial, final, providerId, title);
+              lab.patchConfig({ workspace: "experiment-history" });
+            }}
+          />
+        </div>
+      )}
+
+      {lab.config.workspace === "spectroscopy" && (
+        <div className="min-h-0 flex-1">
+          <SpectroscopyWorkspace
+            system={lab.atomicSystem}
+            config={lab.config}
+            onPatchConfig={lab.patchConfig}
+            onRunSpectroscopyExperiment={(model) => {
+              void lab.runSpectroscopyExperiment(model);
+              lab.patchConfig({ workspace: "experiment-history" });
+            }}
+          />
+        </div>
+      )}
+
+      {lab.config.workspace === "analysis" && (
+        <div className="min-h-0 flex-1">
+          <AnalysisWorkspace
+            element={element}
+            system={lab.atomicSystem}
+            sub={sub}
+            model={state.model}
+            zeff={zeffActive}
+            nrState={lab.nrState}
+            diracState={lab.diracState}
+            config={lab.config}
+            providerSelection={providerSelection}
+            totalRadialView={totalRadialView}
+            electrons={electrons}
+          />
+        </div>
+      )}
+
+      {lab.config.workspace === "experiment-history" && (
+        <div className="min-h-0 flex-1">
+          <ExperimentHistoryWorkspace
+            history={lab.history}
+            executions={lab.executions}
+            selectedResult={lab.selectedResult}
+            platformNotice={lab.platformNotice}
+            onRunSingleState={() => {
+              void lab.runSingleStateExperiment();
+            }}
+            onCancelExecution={lab.cancelExecution}
+            onReplayExperiment={(id) => {
+              void lab.replayStoredExperiment(id);
+            }}
+            onRerunExperiment={(def) => {
+              void lab.rerunStoredExperiment(def);
+            }}
+            onDeleteExperiment={(id) => {
+              void lab.deleteStoredExperiment(id);
+            }}
+            onExportJson={lab.exportExperimentJson}
+            onImportJson={lab.importExperimentJson}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
 function ScaleBar({ extentPm }: { extentPm: number }) {
-  // nice round length ≈ 1/4 of extent
   const raw = extentPm / 4;
   const pow = Math.pow(10, Math.floor(Math.log10(raw)));
   const nice = [1, 2, 5, 10].map((k) => k * pow).reduce((a, b) => (Math.abs(b - raw) < Math.abs(a - raw) ? b : a));

@@ -82,4 +82,24 @@ describe("AtomicSystem domain (Phase 1)", () => {
     const broken = { ...auFermi, q: 12 };
     expect(validateAtomicSystem(broken).valid).toBe(false);
   });
+
+  it("distinguishes bare nuclear mass from neutral atomic mass and warns on accidental neutral-mass substitution", () => {
+    const [h1, h2] = listIsotopesForZ(1);
+    // Neutral 1H atomic mass (~1.007825 u) exceeds bare proton mass (~1.007276 u) by ~1 electron mass
+    expect(h1.neutralAtomicMass_u - h1.nuclearMass_u).toBeCloseTo(EXTENDED_CONSTANTS.m_e_u, 6);
+    expect(h2.neutralAtomicMass_u - h2.nuclearMass_u).toBeCloseTo(EXTENDED_CONSTANTS.m_e_u, 6);
+
+    const sysWithNeutralMistake = createAtomicSystem({
+      Z: 1,
+      N: 1,
+      massNumber: 1,
+      nuclearModel: {
+        kind: "point-finite-mass",
+        nuclearMass_u: h1.neutralAtomicMass_u,
+        source: "test-neutral-substitution",
+      },
+    });
+    const val = validateAtomicSystem(sysWithNeutralMistake);
+    expect(val.issues.some((i) => i.code === "NEUTRAL_ATOMIC_MASS_USED_FOR_NUCLEUS" && i.severity === "warning")).toBe(true);
+  });
 });

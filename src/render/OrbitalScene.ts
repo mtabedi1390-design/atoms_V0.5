@@ -8,6 +8,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { POINT_FRAG, POINT_VERT } from "./shaders";
 import { BOHR_PM, type QuantumNumbers } from "@/physics/hydrogenic";
 import { probabilityCurrentAnalytic } from "@/physics/current";
+import type { IsosurfaceMeshBuffers, Slice2DResult } from "@/numerics/isosurface/marchingTetrahedra";
 
 export type ColorMode = "density" | "phase-real" | "phase-complex" | "layer";
 export type SliceAxis = "none" | "x" | "y" | "z";
@@ -65,6 +66,8 @@ export class OrbitalScene {
   readonly camera: THREE.PerspectiveCamera;
   readonly controls: OrbitControls;
   private layers = new Map<string, Layer>();
+  private isosurfaceGroup = new THREE.Group();
+  private sliceHeatmapMesh: THREE.Mesh | null = null;
   private axes = new THREE.Group();
   private nucleus: THREE.Mesh;
   private currentLines: THREE.LineSegments | null = null;
@@ -108,6 +111,13 @@ export class OrbitalScene {
     );
     this.slicePlane.visible = false;
     this.scene.add(this.slicePlane);
+    this.scene.add(this.isosurfaceGroup);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    keyLight.position.set(1, -1.2, 1.4);
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.35);
+    fillLight.position.set(-1, 1, -0.6);
+    this.scene.add(ambient, keyLight, fillLight);
     this.rebuildAxes();
     this.applySettings(settings);
     this.loop();
@@ -309,6 +319,112 @@ export class OrbitalScene {
     this.scene.add(this.currentLines);
   }
 
+  /** Render extracted Marching Tetrahedra isosurfaces without touching point-cloud layers. */
+  setIsosurfaceMeshes(
+    meshes: readonly IsosurfaceMeshBuffers[],
+    opts: { readonly opacity?: number; readonly wireframe?: boolean } = {},
+  ): void {
+    this.clearIsosurfaces();
+    const opacity = Math.max(0.05, Math.min(1, opts.opacity ?? 0.55));
+    const wireframe = opts.wireframe ?? false;
+
+    for (const m of meshes) {
+      if (m.triangleCount === 0) continue;
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.BufferAttribute(m.positionsPm, 3));
+      geom.setAttribute("normal", new THREE.BufferAttribute(m.normals, 3));
+      const color =
+        m.polarity === "positive" ? 0xf59e0b : m.polarity === "negative" ? 0x38bdf8 : 0x22d3ee;
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.35,
+        metalness: 0.08,
+        transparent: opacity < 0.99,
+        opacity,
+        wireframe,
+        side: THREE.DoubleSide,
+        depthWrite: opacity >= 0.99,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      this.isosurfaceGroup.add(mesh);
+    }
+  }
+
+  clearIsosurfaces(): void {
+    while (this.isosurfaceGroup.children.length > 0) {
+      const child = this.isosurfaceGroup.children.pop()!;
+      this.isosurfaceGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+  }
+
+  /** Project a 2D slice heatmap quad onto XY / XZ / YZ plane inside the 3D scene. */
+  setSliceHeatmap(slice: Slice2DResult | null): void {
+    if (this.sliceHeatmapMesh) {
+      this.scene.remove(this.sliceHeatmapMesh);
+      this.sliceHeatmapMesh.geometry.dispose();
+      const mat = this.sliceHeatmapMesh.material as THREE.MeshBasicMaterial;
+      mat.map?.dispose();
+      mat.dispose();
+      this.sliceHeatmapMesh = null;
+    }
+    if (!slice || slice.maxAbs <= 0) return;
+    const N = slice.resolution;
+    const rgba = new Uint8Array(N * N * 4);
+    for (let i = 0; i < N * N; i++) {
+      const v = slice.values[i];
+      if (slice.isSigned) {
+        const norm = Math.min(1, Math.abs(v) / slice.maxAbs);
+        const gamma = Math.pow(norm, 0.55);
+        if (v >= 0) {
+          rgba[4 * i] = Math.round(245 * gamma);
+          rgba[4 * i + 1] = Math.round(158 * gamma);
+          rgba[4 * i + 2] = Math.round(24 * gamma);
+        } else {
+          rgba[4 * i] = Math.round(40 * gamma);
+          rgba[4 * i + 1] = Math.round(165 * gamma);
+          rgba[4 * i + 2] = Math.round(248 * gamma);
+        }
+        rgba[4 * i + 3] = Math.round(30 + 215 * gamma);
+      } else {
+        const norm = Math.min(1, Math.log1p(250 * (Math.max(0, v) / slice.maxAbs)) / Math.log1p(250));
+        rgba[4 * i] = Math.round(Math.min(255, norm * 280));
+        rgba[4 * i + 1] = Math.round(Math.min(255, norm * norm * 255));
+        rgba[4 * i + 2] = Math.round(Math.min(255, (0.3 + 0.7 * norm) * 230));
+        rgba[4 * i + 3] = Math.round(20 + 225 * norm);
+      }
+    }
+    const tex = new THREE.DataTexture(rgba, N, N, THREE.RGBAFormat);
+    tex.needsUpdate = true;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearFilter;
+
+    const sizePm = slice.extentPm * 2;
+    const geom = new THREE.PlaneGeometry(sizePm, sizePm);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+    const offPm = slice.offsetBohr * BOHR_PM;
+    if (slice.plane === "xy") {
+      mesh.position.set(0, 0, offPm);
+    } else if (slice.plane === "xz") {
+      mesh.rotation.x = Math.PI / 2;
+      mesh.position.set(0, offPm, 0);
+    } else {
+      mesh.rotation.y = Math.PI / 2;
+      mesh.position.set(offPm, 0, 0);
+    }
+    this.sliceHeatmapMesh = mesh;
+    this.scene.add(mesh);
+  }
+
   resize(w: number, h: number): void {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / Math.max(h, 1);
@@ -334,6 +450,8 @@ export class OrbitalScene {
   dispose(): void {
     cancelAnimationFrame(this.raf);
     this.removeLayersExcept(new Set());
+    this.clearIsosurfaces();
+    this.setSliceHeatmap(null);
     this.setCurrentField(null);
     this.controls.dispose();
     this.nucleus.geometry.dispose();

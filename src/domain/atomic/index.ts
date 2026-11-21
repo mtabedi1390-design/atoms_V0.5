@@ -24,8 +24,10 @@ export interface IsotopeSpec {
   readonly Z: number;
   readonly massNumber: number;
   readonly label: string;
-  /** Bare nuclear mass in atomic mass units (u). */
+  /** Bare nuclear mass in atomic mass units (u) — used for reduced-mass μ = m_e M_nuc / (m_e + M_nuc). */
   readonly nuclearMass_u: number;
+  /** Neutral atom mass in atomic mass units (u), distinct from bare nuclear mass by Z*m_e - B_e/c^2. */
+  readonly neutralAtomicMass_u: number;
   readonly source: string;
   readonly isExactNuclearMass: boolean;
 }
@@ -52,38 +54,39 @@ export interface AtomicSystem {
 interface CuratedIsotopeEntry {
   massNumber: number;
   nuclearMass_u: number;
+  neutralAtomicMass_u: number;
   source: string;
   default?: boolean;
 }
 
 /**
  * Curated bare nuclear masses (CODATA 2018 for p, d, alpha; AME2020 atomic mass minus Z*m_e
- * without binding correction flagged via source where applicable).
+ * without binding correction flagged via source where applicable) paired with neutral atomic masses.
  */
 const CURATED_ISOTOPES: Record<number, readonly CuratedIsotopeEntry[]> = {
   1: [
-    { massNumber: 1, nuclearMass_u: EXTENDED_CONSTANTS.m_p_u, source: "CODATA 2018 proton mass", default: true },
-    { massNumber: 2, nuclearMass_u: EXTENDED_CONSTANTS.m_d_u, source: "CODATA 2018 deuteron mass" },
-    { massNumber: 3, nuclearMass_u: 3.01550071621, source: "CODATA 2018 triton mass" },
+    { massNumber: 1, nuclearMass_u: EXTENDED_CONSTANTS.m_p_u, neutralAtomicMass_u: 1.00782503223, source: "CODATA 2018 proton mass", default: true },
+    { massNumber: 2, nuclearMass_u: EXTENDED_CONSTANTS.m_d_u, neutralAtomicMass_u: 2.01410177811, source: "CODATA 2018 deuteron mass" },
+    { massNumber: 3, nuclearMass_u: 3.01550071621, neutralAtomicMass_u: 3.01604928199, source: "CODATA 2018 triton mass" },
   ],
   2: [
-    { massNumber: 3, nuclearMass_u: 3.014932247175, source: "CODATA 2018 helion mass" },
-    { massNumber: 4, nuclearMass_u: EXTENDED_CONSTANTS.m_alpha_u, source: "CODATA 2018 alpha particle mass", default: true },
+    { massNumber: 3, nuclearMass_u: 3.014932247175, neutralAtomicMass_u: 3.01602932265, source: "CODATA 2018 helion mass" },
+    { massNumber: 4, nuclearMass_u: EXTENDED_CONSTANTS.m_alpha_u, neutralAtomicMass_u: 4.00260325413, source: "CODATA 2018 alpha particle mass", default: true },
   ],
   3: [
-    { massNumber: 6, nuclearMass_u: 6.013477, source: "AME2020 neutral mass - 3 m_e" },
-    { massNumber: 7, nuclearMass_u: 7.014358, source: "AME2020 neutral mass - 3 m_e", default: true },
+    { massNumber: 6, nuclearMass_u: 6.0151228874 - 3 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 6.0151228874, source: "AME2020 neutral mass - 3 m_e" },
+    { massNumber: 7, nuclearMass_u: 7.0160034366 - 3 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 7.0160034366, source: "AME2020 neutral mass - 3 m_e", default: true },
   ],
   6: [
-    { massNumber: 12, nuclearMass_u: 12 - 6 * EXTENDED_CONSTANTS.m_e_u, source: "12C IUPAC definition - 6 m_e", default: true },
-    { massNumber: 13, nuclearMass_u: 13.003354835 - 6 * EXTENDED_CONSTANTS.m_e_u, source: "AME2020 - 6 m_e" },
+    { massNumber: 12, nuclearMass_u: 12 - 6 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 12.0, source: "12C IUPAC definition - 6 m_e", default: true },
+    { massNumber: 13, nuclearMass_u: 13.00335483507 - 6 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 13.00335483507, source: "AME2020 - 6 m_e" },
   ],
-  7: [{ massNumber: 14, nuclearMass_u: 14.003074004 - 7 * EXTENDED_CONSTANTS.m_e_u, source: "AME2020 - 7 m_e", default: true }],
-  8: [{ massNumber: 16, nuclearMass_u: 15.994914619 - 8 * EXTENDED_CONSTANTS.m_e_u, source: "AME2020 - 8 m_e", default: true }],
-  10: [{ massNumber: 20, nuclearMass_u: 19.992440176 - 10 * EXTENDED_CONSTANTS.m_e_u, source: "AME2020 - 10 m_e", default: true }],
-  26: [{ massNumber: 56, nuclearMass_u: 55.934936 - 26 * EXTENDED_CONSTANTS.m_e_u, source: "AME2020 - 26 m_e", default: true }],
-  79: [{ massNumber: 197, nuclearMass_u: 196.966570 - 79 * EXTENDED_CONSTANTS.m_e_u, source: "AME2020 - 79 m_e", default: true }],
-  92: [{ massNumber: 238, nuclearMass_u: 238.050788 - 92 * EXTENDED_CONSTANTS.m_e_u, source: "AME2020 - 92 m_e", default: true }],
+  7: [{ massNumber: 14, nuclearMass_u: 14.00307400443 - 7 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 14.00307400443, source: "AME2020 - 7 m_e", default: true }],
+  8: [{ massNumber: 16, nuclearMass_u: 15.99491461957 - 8 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 15.99491461957, source: "AME2020 - 8 m_e", default: true }],
+  10: [{ massNumber: 20, nuclearMass_u: 19.9924401762 - 10 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 19.9924401762, source: "AME2020 - 10 m_e", default: true }],
+  26: [{ massNumber: 56, nuclearMass_u: 55.9349363 - 26 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 55.9349363, source: "AME2020 - 26 m_e", default: true }],
+  79: [{ massNumber: 197, nuclearMass_u: 196.9665687 - 79 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 196.9665687, source: "AME2020 - 79 m_e", default: true }],
+  92: [{ massNumber: 238, nuclearMass_u: 238.0507884 - 92 * EXTENDED_CONSTANTS.m_e_u, neutralAtomicMass_u: 238.0507884, source: "AME2020 - 92 m_e", default: true }],
 };
 
 export function speciesForZ(Z: number): AtomicSpecies {
@@ -100,6 +103,7 @@ export function listIsotopesForZ(Z: number): IsotopeSpec[] {
       massNumber: c.massNumber,
       label: `${c.massNumber}${el.symbol}`,
       nuclearMass_u: c.nuclearMass_u,
+      neutralAtomicMass_u: c.neutralAtomicMass_u,
       source: c.source,
       isExactNuclearMass: Z <= 2,
     }));
@@ -112,7 +116,8 @@ export function listIsotopesForZ(Z: number): IsotopeSpec[] {
       massNumber: approxA,
       label: `${approxA}${el.symbol}`,
       nuclearMass_u: approxNuclearU,
-      source: `${el.mass.source} (atomic mass - Z*m_e approximation)`,
+      neutralAtomicMass_u: el.mass.value,
+      source: `${el.mass.source} (neutral atomic mass - Z*m_e approximation)`,
       isExactNuclearMass: false,
     },
   ];
@@ -129,6 +134,7 @@ export function defaultIsotopeForZ(Z: number, massNumber?: number): IsotopeSpec 
       massNumber,
       label: `${massNumber}${el.symbol}`,
       nuclearMass_u: Math.max(0.5, massNumber - Z * EXTENDED_CONSTANTS.m_e_u),
+      neutralAtomicMass_u: massNumber,
       source: "User-specified mass number A (approx nuclear mass A - Z*m_e)",
       isExactNuclearMass: false,
     };
@@ -139,6 +145,33 @@ export function defaultIsotopeForZ(Z: number, massNumber?: number): IsotopeSpec 
     if (idx >= 0) return list[idx];
   }
   return list[0];
+}
+
+/** Build a NuclearModel bound explicitly to the isotope's bare nuclear mass (never neutral atomic mass). */
+export function createNuclearModelForIsotope(
+  kind: NuclearModel["kind"],
+  isotope: IsotopeSpec,
+  finiteOpts?: { readonly rmsRadius_fm: number; readonly skinThickness_fm?: number },
+): NuclearModel {
+  switch (kind) {
+    case "point-infinite-mass":
+      return { kind: "point-infinite-mass" };
+    case "point-finite-mass":
+      return { kind: "point-finite-mass", nuclearMass_u: isotope.nuclearMass_u, source: isotope.source };
+    case "finite-uniform":
+      return {
+        kind: "finite-uniform",
+        rmsRadius_fm: finiteOpts?.rmsRadius_fm ?? 0.8414,
+        nuclearMass_u: isotope.nuclearMass_u,
+      };
+    case "finite-fermi":
+      return {
+        kind: "finite-fermi",
+        rmsRadius_fm: finiteOpts?.rmsRadius_fm ?? 5.5,
+        skinThickness_fm: finiteOpts?.skinThickness_fm ?? 2.3,
+        nuclearMass_u: isotope.nuclearMass_u,
+      };
+  }
 }
 
 export function computeReducedMassRatio(model: NuclearModel): number {
@@ -214,6 +247,23 @@ export function validateAtomicSystem(sys: AtomicSystem): ValidationResult {
       field: "isotope.nuclearMass_u",
       message: `Nuclear mass must be finite and > 0 u (got ${sys.isotope.nuclearMass_u}).`,
     });
+  }
+  if (sys.nuclearModel.kind !== "point-infinite-mass") {
+    if (!(sys.nuclearModel.nuclearMass_u > 0) || !Number.isFinite(sys.nuclearModel.nuclearMass_u)) {
+      issues.push({
+        severity: "error",
+        code: "INVALID_NUCLEAR_MODEL_MASS",
+        field: "nuclearModel.nuclearMass_u",
+        message: `Nuclear model requires bare nuclear mass > 0 u (got ${sys.nuclearModel.nuclearMass_u}).`,
+      });
+    } else if (Math.abs(sys.nuclearModel.nuclearMass_u - sys.isotope.neutralAtomicMass_u) < 1e-7 && Math.abs(sys.isotope.neutralAtomicMass_u - sys.isotope.nuclearMass_u) > 1e-4) {
+      issues.push({
+        severity: "warning",
+        code: "NEUTRAL_ATOMIC_MASS_USED_FOR_NUCLEUS",
+        field: "nuclearModel.nuclearMass_u",
+        message: `nuclearModel.nuclearMass_u (${sys.nuclearModel.nuclearMass_u} u) matches neutral atomic mass rather than bare nuclear mass (${sys.isotope.nuclearMass_u} u).`,
+      });
+    }
   }
   if (sys.nuclearModel.kind === "finite-uniform" || sys.nuclearModel.kind === "finite-fermi") {
     if (!(sys.nuclearModel.rmsRadius_fm > 0) || !Number.isFinite(sys.nuclearModel.rmsRadius_fm)) {

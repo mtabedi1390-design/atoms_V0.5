@@ -2,6 +2,33 @@
 
 All notable changes to **ATOMS** are documented in this file.
 
+## [0.6.0] — 2026-11-21
+
+### Added
+- **General Atomic & Quantum Domain Layer (`src/domain/`, `src/physics/units.ts`)**:
+  - Added general `AtomicSystem` ($Z = 1..118$, $N \ge 0$, $q = Z - N$ cations/anions/neutral), `IsotopeSpec` explicitly distinguishing bare `nuclearMass_u` from `neutralAtomicMass_u`, and `NuclearModel` (`point-infinite-mass`, `point-finite-mass`, `finite-uniform`, `finite-fermi`).
+  - Added strictly typed `QuantumState` union (`NonRelativisticState`, `RelativisticState`, `SuperpositionState`, `ConfigurationAverageState`) with exact $\kappa \leftrightarrow (l, j)$ bijections and validity guards.
+  - Added centralized pinned `CODATA-2018` physical constants and typed unit conversion algebra (`Ha`, `eV`, `J`, `cm-1`, `a0`, `m`, `angstrom`, `nm`, `pm`, `fm`, `s`, `au_t`, `Hz`, `THz`, `u`, `kg`, `me`, `e`, `C`).
+- **Auditable Experiment Platform (`src/experiments/`, `src/workers/`)**:
+  - Separated versioned `ExperimentDefinition` (`atom-exp/v1`), `ExperimentExecution` (`atom-exec/v1`), `ExperimentResultRecord` (`atom-res/v1`), and `ScientificProvenance`.
+  - Implemented `ExperimentRunner`, `ExperimentScheduler` (monotonic `runSequence` stale-result protection, `assertStructuredCloneSafe`), real `AbortSignal` cancellation, `ExperimentWorkerClient` (`experiment.worker.ts`), `IndexedDBExperimentStore` (`atoms_laboratory_db`, with `MemoryExperimentStore` fallback), and schema-validated `ExperimentSerializer` (`atoms-experiment-bundle` JSON export/import distinguishing `computed` vs `loaded-from-store` vs `imported-json`).
+- **Analytical Physics Providers (`src/physics/providers/`)**:
+  - Implemented `schrodingerCoulombV6Provider` (`0.6.0`) wrapping `v0.5` hydrogenic math with isotope bare-nuclear reduced-mass scaling, analytic expectation values ($\langle r^k \rangle$, $k = -3..-1, 1, 2$), and domain gating.
+  - Implemented `diracCoulombV6Provider` (`0.6.0`) solving exact point-Coulomb 4-component Dirac spinors ($P_{n\kappa}, Q_{n\kappa}, \Omega_{\kappa m_j}$), Sommerfeld–Dirac fine-structure energies, nonrelativistic $\alpha \to 0$ convergence, spinor quadrature norms, and exact $(Z\alpha)^2 < \kappa^2$ domain enforcement.
+  - Preserved and adapted `v0.5` providers (`lobato2026-df`, `pyscf-hf`, `browser-slater`, `datatoms-2026-mcdf`, `grasp-mcdhf`) in `PhysicsProviderRegistry`.
+- **Quantum Visualization Numerics (`src/numerics/isosurface/`, `src/sampling/diracSampler.ts`, `src/workers/visualization.worker.ts`)**:
+  - Added off-thread Dirac 4-spinor cloud sampling (`total |Ψ|²`, `large |P|²`, `small |Q|²` views), watertight 6-tetrahedra 3D Marching Tetrahedra isosurface mesh extraction (`extractStateIsosurface`), and 2D XY/XZ/YZ plane slice heatmaps (`Slice2DCanvas`).
+- **E1 Transitions & Dynamic Spectroscopy (`src/physics/transitions/`, `src/physics/spectroscopy/`)**:
+  - Implemented `BigInt`-stabilized `wigner3j` / `wigner6j` angular algebra and length-gauge Nonrelativistic Schrödinger & Relativistic Dirac E1 transition calculators (selection rules, polarization components $q = -1,0,+1$, oscillator strength $f_{if}$, Einstein $A_{fi}$, $\Delta E$, vacuum $\lambda$).
+  - Implemented `generateHydrogenLikeSpectrum` (`lyman`, `balmer`, `paschen`, `custom` series, vacuum convention, zero empirical broadening) with empirical $^1\text{H}$ vacuum NIST comparison (`src/data/references/nistHydrogenLines.json`, derived transparently from pinned `nist_asd_ie.tsv`).
+- **Integrated ATOMS Laboratory UI (`src/components/laboratory/`, `src/app/useAtomsLaboratory.ts`)**:
+  - Added `WorkspaceNav` unifying 8 live workspaces (`Workbench`, `Atomic Systems`, `Quantum States`, `Energy Structure`, `Transitions`, `Spectroscopy`, `Analysis`, `Experiment History`) while keeping the `v0.5` `OrbitalScene` WebGL2 context preserved.
+- **Verification & Documentation**:
+  - Expanded suites to 15 Vitest files (**112 tests**), **340** C++17 native checks (Debug + Release), and **20** Playwright browser tests (`v0.5` regression + `v0.6` laboratory).
+  - Delivered all 15 v0.6 documentation files under `docs/`.
+
+---
+
 ## [0.5.0] — 2026-11-20
 
 ### Added
@@ -10,22 +37,9 @@ All notable changes to **ATOMS** are documented in this file.
   - Added closed-form evaluator and deterministic radial quadrature validator `src/physics/diracFock.ts` (`diracFockDensityBohr3`, `diracFockRadialPDF`, `diracFockRadialGrid`) with `< 2e-7` relative charge conservation error across `Z = 1..118`.
   - Wired `"tabulated-df"` inverse-CDF Monte Carlo sampling in `src/sampling/sampler.ts` and made Lobato 2026 Dirac–Fock the default quantitative density source in Full-Atom mode (`?source=dirac-fock|hf|model`).
 - **Pinned Scientific Data Pipeline (`data/sources/`, `science/build_atomic_data.py`)**:
-  - Pinned verbatim upstream snapshots with SHA-256 verification in `data/sources/MANIFEST.json`:
-    - `data/sources/nist_asd_ie.tsv` (NIST ASD ground configurations, ground terms & $J$, 1st ionization energies + uncertainties for `Z = 1..108`).
-    - `data/sources/lobato2026_adaptive_dirac_pade.txt` and `data/sources/lobato2026_positivity_certificate.json`.
-  - Generated deterministic JSON assets `src/data/nist/asd_ground_levels.json` and `src/data/df/lobato2026.json`, plus authoritative citation registry `src/data/sources.ts`.
-  - Enriched `ElementRecord` (`src/data/elements.ts`) with `groundTerm`, `groundJ`, `isOpenShell`, `ionizationUncertainty_eV`, `ionizationRef`, NIST predicted IEs for `Z = 104..108` (flagged `predicted`), and strict `null` / `unavailable` handling for missing `Z = 109..118` NIST fields.
-- **118-Element Provider & Coverage Architecture**:
-  - Expanded `src/science/providers.ts` with `lobatoDFProvider` (`computed-and-validated`), `pyscfHFProvider` (`computed-basis-limited`), `browser-slater` (`qualitative-approximation`), `datatoms-2026-mcdf` (explicitly blocked for neutral `Z > 10` due to upstream `1 <= N <= 10` ion scope), and `grasp-mcdhf` (explicitly blocked due to missing GRASP2018).
-  - Created machine-readable `src/science/coverageMatrix.ts` and generator `scripts/generate_accuracy_matrix.ts` (`npm run data:matrix` → `docs/ACCURACY_MATRIX.md`).
-- **Honest Scientific Visualization & UI Enhancements**:
-  - Updated `RadialPlot.tsx` to render true total radial density $P_{\text{total}}(r) = 4\pi r^2\rho(r)$ (with numeric $\langle r \rangle$ and $\int 4\pi r^2\rho(r)\,dr$) when viewing Dirac–Fock or PySCF HF total densities, instead of falling back to single-orbital $P_r(r)$.
-  - Updated `TelemetryBar.tsx`, `ControlRail.tsx`, `EnergyDiagram.tsx`, and `Inspector.tsx` to display open-shell spherical-average conventions, disable incompatible subshell-layer/phase controls in total-density modes, separate NIST 1st IE / PySCF total HF energy / model surrogate bars, and surface the per-element coverage matrix.
-- **Documentation & Verification Suite**:
-  - Added `docs/SCIENTIFIC_SCOPE.md`, `docs/ACCURACY_MATRIX.md`, `docs/USER_GUIDE.md`, and `docs/DEVELOPER_GUIDE.md`; updated `README.md`, `docs/MODELS.md`, `docs/DATA.md`, `docs/AUDIT.md`, `docs/VERIFICATION.md`, and `docs/BENCHMARK.md`.
-  - Updated `scripts/test_native.sh` with direct `g++` C++17 Debug + Release fallback when `cmake` is absent, enabling all 5 C++↔TS parity tests in `vitest`.
+  - Pinned verbatim upstream snapshots with SHA-256 verification in `data/sources/MANIFEST.json`.
+  - Enriched `ElementRecord` (`src/data/elements.ts`) with NIST ground terms, uncertainties, and honest `unavailable` status for missing `Z = 109..118`.
+- **118-Element Provider & Coverage Architecture**, honest UI/Inspector enhancements, and `v0.5.0` verification suite.
 
 ### Fixed
-- **`OrbitalScene.ts` single-layer `ownMax` bug**: `setLayer()` previously omitted `L.ownMax = data.maxDensity`, leaving single-orbital and total-density peak normalization fixed at `1.0`.
-- **`App.tsx` cached electron-count loss**: Prevented electron-count totals from disappearing when cached subshells skipped re-sampling after layer parameter updates.
-- **Incompatible color-mode enforcement (`App.tsx`)**: Enforced `colorMode = "density"` in total-density modes (`dirac-fock`, `hf`) and `atom` phase views so wavefunction sign/phase colors cannot mislabel spherical densities.
+- Fixed `OrbitalScene.ts` single-layer `ownMax` normalization, `App.tsx` cached electron-count retention, and incompatible color-mode enforcement in total-density modes.

@@ -62,6 +62,14 @@ export const lobatoDiracFockV6Provider: PhysicsProvider<
   capabilities: ["total-spherical-density", "radial-probability"],
 
   supports(system: AtomicSystem, state: QuantumState): SupportAssessment {
+    if (system.nuclearModel.kind === "finite-uniform" || system.nuclearModel.kind === "finite-fermi") {
+      return {
+        supported: false,
+        evidenceClass: "unavailable",
+        reasons: [`Lobato et al. (2026) Dirac–Fock uses a fixed published nuclear charge table and does not support parameterized "${system.nuclearModel.kind}" solvers.`],
+        limitations: ["No user-parameterized finite-nucleus solver is available."],
+      };
+    }
     if (system.q !== 0 || system.N !== system.Z) {
       return {
         supported: false,
@@ -145,6 +153,14 @@ export const pyscfHartreeFockV6Provider: PhysicsProvider<
   capabilities: ["total-spherical-density", "total-energy", "radial-probability"],
 
   supports(system: AtomicSystem, state: QuantumState): SupportAssessment {
+    if (system.nuclearModel.kind === "finite-uniform" || system.nuclearModel.kind === "finite-fermi") {
+      return {
+        supported: false,
+        evidenceClass: "unavailable",
+        reasons: [`Bundled PySCF HF datasets assume a fixed point-nucleus model and do not support parameterized "${system.nuclearModel.kind}" solvers.`],
+        limitations: [],
+      };
+    }
     if (system.q !== 0) {
       return {
         supported: false,
@@ -228,6 +244,14 @@ export const slaterV6Provider: PhysicsProvider<
   capabilities: ["total-spherical-density", "radial-probability", "spatial-density"],
 
   supports(system: AtomicSystem, state: QuantumState): SupportAssessment {
+    if (system.nuclearModel.kind === "finite-uniform" || system.nuclearModel.kind === "finite-fermi") {
+      return {
+        supported: false,
+        evidenceClass: "unavailable",
+        reasons: [`Slater screening rules assume a point nucleus and do not support parameterized "${system.nuclearModel.kind}" solvers.`],
+        limitations: [],
+      };
+    }
     if (system.q !== 0) {
       return {
         supported: false,

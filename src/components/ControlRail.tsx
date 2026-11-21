@@ -4,6 +4,7 @@ import { subshellLabel, SUBSHELL_LETTERS } from "@/physics/hydrogenic";
 import { MODELS, type ModelId } from "@/physics/models";
 import { HF_ATOMS, hfDatasetFor } from "@/science/providers";
 import type { Action, AppState, DensitySource } from "@/state/appState";
+import type { LaboratoryConfig } from "@/app/useAtomsLaboratory";
 import { PeriodicTable } from "./PeriodicTable";
 import { Panel, Row, Seg, Slider, Toggle } from "./ui";
 
@@ -14,6 +15,9 @@ interface Props {
   extentPm: number;
   layerColors: Record<string, string>;
   onResetCamera: () => void;
+  labConfig?: LaboratoryConfig;
+  onPatchLab?: (patch: Partial<LaboratoryConfig>) => void;
+  electronCount?: number;
 }
 
 const M_LABELS_REAL: Record<number, string[]> = {
@@ -23,7 +27,17 @@ const M_LABELS_REAL: Record<number, string[]> = {
   3: ["f_y(3x²−y²)", "f_xyz", "f_yz²", "f_z³", "f_xz²", "f_z(x²−y²)", "f_x(x²−3y²)"],
 };
 
-export function ControlRail({ state, element: e, dispatch, extentPm, layerColors, onResetCamera }: Props) {
+export function ControlRail({
+  state,
+  element: e,
+  dispatch,
+  extentPm,
+  layerColors,
+  onResetCamera,
+  labConfig,
+  onPatchLab,
+  electronCount,
+}: Props) {
   const r = state.render;
   const maxN = Math.max(7, ...e.subshells.map((s) => s.n));
   const nOptions = Array.from({ length: maxN }, (_, i) => i + 1);
@@ -208,6 +222,74 @@ export function ControlRail({ state, element: e, dispatch, extentPm, layerColors
         <Slider label="Slab thickness" value={r.sliceThicknessPm} min={extentPm / 200} max={extentPm / 2} step={extentPm / 400} onChange={(sliceThicknessPm) => dispatch({ type: "render", patch: { sliceThicknessPm } })} format={(v) => `${v.toFixed(1)} pm`} />
         <p className="text-[10px] text-zinc-500">Slicing is a display filter on the GPU; the sampled distribution is unchanged.</p>
       </Panel>
+
+      {labConfig && onPatchLab && (
+        <Panel title="v0.6 Quantum Engine & 3D Isosurface">
+          <Seg
+            value={labConfig.theoryMode}
+            onChange={(theoryMode) => onPatchLab({ theoryMode })}
+            options={[
+              { v: "schrodinger", label: "Schrödinger (NR)" },
+              {
+                v: "dirac",
+                label: "Dirac 4-spinor",
+                disabled: state.mode !== "single" || (electronCount !== undefined && electronCount !== 1 && e.Z > 1 && state.model !== "hydrogenic-exact"),
+                title: "One-electron point-Coulomb Dirac spinor visualization (single-state N=1 ion/H)",
+              },
+            ]}
+          />
+          {labConfig.theoryMode === "dirac" && state.mode === "single" && (
+            <div className="mt-2 space-y-1.5">
+              <Seg
+                value={labConfig.diracComponentView}
+                onChange={(diracComponentView) => onPatchLab({ diracComponentView })}
+                options={[
+                  { v: "total", label: "Total |Ψ|²" },
+                  { v: "large", label: "Large P" },
+                  { v: "small", label: "Small Q" },
+                ]}
+              />
+              <p className="text-[10px] text-amber-300/90">
+                P and Q are coupled 4-spinor components of one eigenstate (use Quantum States workspace to edit κ, j, m_j).
+              </p>
+            </div>
+          )}
+          <div className="mt-2">
+            <Toggle
+              label="3D Isosurface (Marching Tetrahedra)"
+              checked={labConfig.showIsosurface}
+              onChange={(showIsosurface) => onPatchLab({ showIsosurface })}
+            />
+            {labConfig.showIsosurface && (
+              <div className="mt-1.5 space-y-1">
+                <Slider
+                  label="Isovalue (fraction of max)"
+                  value={labConfig.isoFraction}
+                  min={0.05}
+                  max={0.75}
+                  step={0.05}
+                  onChange={(isoFraction) => onPatchLab({ isoFraction })}
+                  format={(v) => `${(v * 100).toFixed(0)}%`}
+                />
+                <Seg
+                  value={String(labConfig.isoResolution)}
+                  onChange={(res) => onPatchLab({ isoResolution: Number(res) as 24 | 32 | 40 })}
+                  options={[
+                    { v: "24", label: "24³ fast" },
+                    { v: "32", label: "32³ std" },
+                    { v: "40", label: "40³ fine" },
+                  ]}
+                />
+                <Toggle
+                  label="Wireframe isosurface"
+                  checked={labConfig.isoWireframe}
+                  onChange={(isoWireframe) => onPatchLab({ isoWireframe })}
+                />
+              </div>
+            )}
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }

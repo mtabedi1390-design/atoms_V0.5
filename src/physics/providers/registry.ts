@@ -17,6 +17,8 @@ import {
   pyscfHartreeFockV6Provider,
   slaterV6Provider,
 } from "./legacyAdapters";
+import { diracCoulombV6Provider } from "./dirac";
+import { schrodingerCoulombV6Provider } from "./schrodinger";
 
 export interface ProviderAssessmentEntry {
   readonly provider: PhysicsProvider;
@@ -67,6 +69,8 @@ export class PhysicsProviderRegistry {
 
 export function createDefaultProviderRegistry(): PhysicsProviderRegistry {
   return new PhysicsProviderRegistry([
+    schrodingerCoulombV6Provider,
+    diracCoulombV6Provider,
     lobatoDiracFockV6Provider,
     pyscfHartreeFockV6Provider,
     slaterV6Provider,

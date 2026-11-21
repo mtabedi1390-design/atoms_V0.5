@@ -1,0 +1,124 @@
+{
+  "schema": "atoms.nist-h-reference.v1",
+  "species": "H I",
+  "Z": 1,
+  "A": 1,
+  "wavelengthConvention": "vacuum",
+  "pinnedSourceFile": "data/sources/nist_asd_ie.tsv",
+  "pinnedGroundIonizationEnergy_eV": 13.598434599702,
+  "pinnedGroundIonizationUncertainty_eV": 1.2e-11,
+  "pinnedSourceBibRef": "NIST ASD HDEL (Kramida, 2010, Atom. Data Nucl. Data Tables 96, 586)",
+  "provenanceNote": "Ground-state ionization energy 13.598434599702(12) eV is read verbatim from the pinned data/sources/nist_asd_ie.tsv snapshot. Vacuum Ritz term-centroid transition wavelengths are derived from this pinned empirical 1H I ionization constant via E_n = -IE_1H / n^2 and SI exact hc (wavelengths are vacuum, not standard air). Individual hyperfine/Lamb-shifted lines.pl rows are not bundled offline.",
+  "lines": [
+    {
+      "id": "lyman-alpha",
+      "series": "lyman",
+      "label": "Lyman-alpha (1s -> 2p)",
+      "lowerN": 1,
+      "upperN": 2,
+      "vacuumWavelength_nm": 121.56701,
+      "photonEnergy_eV": 10.19882595,
+      "relativeOrder": "strongest-uv"
+    },
+    {
+      "id": "lyman-beta",
+      "series": "lyman",
+      "label": "Lyman-beta (1s -> 3p)",
+      "lowerN": 1,
+      "upperN": 3,
+      "vacuumWavelength_nm": 102.57223,
+      "photonEnergy_eV": 12.08749742,
+      "relativeOrder": "uv-2"
+    },
+    {
+      "id": "lyman-gamma",
+      "series": "lyman",
+      "label": "Lyman-gamma (1s -> 4p)",
+      "lowerN": 1,
+      "upperN": 4,
+      "vacuumWavelength_nm": 97.25368,
+      "photonEnergy_eV": 12.74853244,
+      "relativeOrder": "uv-3"
+    },
+    {
+      "id": "lyman-delta",
+      "series": "lyman",
+      "label": "Lyman-delta (1s -> 5p)",
+      "lowerN": 1,
+      "upperN": 5,
+      "vacuumWavelength_nm": 94.97431,
+      "photonEnergy_eV": 13.05449722,
+      "relativeOrder": "uv-4"
+    },
+    {
+      "id": "balmer-alpha",
+      "series": "balmer",
+      "label": "Balmer-alpha / H-alpha (n=2 -> 3)",
+      "lowerN": 2,
+      "upperN": 3,
+      "vacuumWavelength_nm": 656.4614,
+      "photonEnergy_eV": 1.88867147,
+      "relativeOrder": "strongest-visible"
+    },
+    {
+      "id": "balmer-beta",
+      "series": "balmer",
+      "label": "Balmer-beta / H-beta (n=2 -> 4)",
+      "lowerN": 2,
+      "upperN": 4,
+      "vacuumWavelength_nm": 486.2683,
+      "photonEnergy_eV": 2.54970649,
+      "relativeOrder": "visible-2"
+    },
+    {
+      "id": "balmer-gamma",
+      "series": "balmer",
+      "label": "Balmer-gamma / H-gamma (n=2 -> 5)",
+      "lowerN": 2,
+      "upperN": 5,
+      "vacuumWavelength_nm": 434.1685,
+      "photonEnergy_eV": 2.85567127,
+      "relativeOrder": "visible-3"
+    },
+    {
+      "id": "balmer-delta",
+      "series": "balmer",
+      "label": "Balmer-delta / H-delta (n=2 -> 6)",
+      "lowerN": 2,
+      "upperN": 6,
+      "vacuumWavelength_nm": 410.2892,
+      "photonEnergy_eV": 3.02187436,
+      "relativeOrder": "visible-4"
+    },
+    {
+      "id": "paschen-alpha",
+      "series": "paschen",
+      "label": "Paschen-alpha (n=3 -> 4)",
+      "lowerN": 3,
+      "upperN": 4,
+      "vacuumWavelength_nm": 1875.613,
+      "photonEnergy_eV": 0.66103502,
+      "relativeOrder": "strongest-ir"
+    },
+    {
+      "id": "paschen-beta",
+      "series": "paschen",
+      "label": "Paschen-beta (n=3 -> 5)",
+      "lowerN": 3,
+      "upperN": 5,
+      "vacuumWavelength_nm": 1282.159,
+      "photonEnergy_eV": 0.96699979,
+      "relativeOrder": "ir-2"
+    },
+    {
+      "id": "paschen-gamma",
+      "series": "paschen",
+      "label": "Paschen-gamma (n=3 -> 6)",
+      "lowerN": 3,
+      "upperN": 6,
+      "vacuumWavelength_nm": 1094.109,
+      "photonEnergy_eV": 1.13320288,
+      "relativeOrder": "ir-3"
+    }
+  ]
+}

@@ -1,65 +1,50 @@
-# ATOMS v0.5.0 — Developer Guide
-
-## 1. Repository Structure
-
-```
-data/sources/               Pinned upstream scientific snapshots + SHA-256 MANIFEST.json
-science/
-  build_atomic_data.py      Pure-Python SHA-256 verifier + JSON builder (NIST ASD + Lobato 2026)
-  hf_export.py              Offline PySCF RHF/ROHF density exporter
-native/
-  quantum_core.hpp          Header-only C++17 reference physics core (zero OpenGL dependency)
-  tests/                    quantum_core_test.cpp (340 checks) & reference_dump.cpp (1020 vectors)
-scripts/
-  test_native.sh            Debug + Release native build & test (CMake or g++ fallback)
-  generate_accuracy_matrix.ts  Generates docs/ACCURACY_MATRIX.md from src/science/coverageMatrix.ts
-  benchmark.mjs             Headless Chromium benchmark runner (writes docs/BENCHMARK.md)
-src/
-  data/                     elements.ts, sources.ts, nist/asd_ground_levels.json, df/lobato2026.json, hf/*.json
-  physics/                  hydrogenic.ts, diracFock.ts, density.ts, current.ts, models.ts, special.ts, constants.ts
-  science/                  providers.ts, coverageMatrix.ts
-  sampling/                 sampler.ts, client.ts, sampler.worker.ts, protocol.ts
-  render/                   OrbitalScene.ts, shaders.ts
-  state/                    appState.ts
-  components/               ControlRail, TelemetryBar, RadialPlot, EnergyDiagram, Inspector, PeriodicTable, ui
-tests/browser/              Playwright E2E tests (core.spec.ts, science.spec.ts, responsive.spec.ts)
-```
+# ATOMS v0.6.0 — Developer Guide
 
 ---
 
-## 2. Rebuilding Scientific Data & Matrix
+## 1. Architecture & Layer Rules
 
-1. Regenerate normalized JSON tables from `data/sources/`:
-   ```bash
-   npm run data:build
-   ```
-   This verifies SHA-256 checksums in `data/sources/MANIFEST.json`, validates non-negativity and radial charge integrals (`max relative error < 1e-6`), and writes `src/data/nist/asd_ground_levels.json` and `src/data/df/lobato2026.json`.
-2. Regenerate the 118-element Markdown accuracy matrix:
-   ```bash
-   npm run data:matrix
-   ```
+- **Strict Layer Isolation**: `src/domain/`, `src/physics/`, `src/science/`, `src/experiments/`, `src/workers/`, and `src/numerics/` never import `react`, DOM globals (outside worker/IndexedDB storage boundaries), or `three`.
+- **Two-Stage Execution**:
+  - Real-time 3D visualization fields & point clouds execute off-thread in `sampler.worker.ts` and `visualization.worker.ts` with `Transferable` `Float32Array` buffers and monotonic request IDs (eliminating stale-frame races).
+  - Auditable scientific calculations execute asynchronously via `ExperimentRunner` -> `ExperimentWorkerClient` -> `experiment.worker.ts` (with `AbortSignal` cancellation and `assertStructuredCloneSafe` validation).
 
 ---
 
-## 3. C++ ↔ TypeScript Reference Parity
-
-- `native/quantum_core.hpp` mirrors the exact hydrogenic radial/angular functions, energies, $\langle r \rangle$, and azimuthal probability current $\mathbf{j}$ in `src/physics/`.
-- Run `npm run test:native` to build both `build-core-Debug` (`-O0 -g`) and `build-core-Release` (`-O2 -DNDEBUG`) and execute the 340 always-active `CHECK` assertions.
-- Whenever `build-core-Release/quantum_reference_dump` or `build-core-Debug/quantum_reference_dump` exists, `npm test` automatically executes all 5 tests in `src/physics/__tests__/native_parity.test.ts` across 1,020 vectors (`R`, `RZ`, `E`, `mean`, `Y`, `J`).
-
----
-
-## 4. Verification Checklist Before Release
+## 2. Commands & Build Workflow
 
 ```bash
-npm run data:build
-npm run data:matrix
-npm run typecheck
-npm run test:native
-npm test
-npm run build
-npm run test:browser
+npm ci                  # Install dependencies cleanly
+npm run data:build      # Verify SHA-256 hashes & build NIST/Lobato JSON tables
+npm run data:matrix     # Regenerate docs/ACCURACY_MATRIX.md
+npm run typecheck       # Strict TypeScript compiler check (tsc --noEmit)
+npm run lint            # TypeScript syntax/type validation
+npm run test:native     # Compile Debug & Release C++17 native core (340 checks each)
+npm test                # Run full Vitest suite (15 files, 112 tests, incl. C++ parity)
+npm run build           # Production Vite singlefile + inline Worker build (dist/index.html)
+npm run test:browser    # Run Playwright WebGL2 & Laboratory end-to-end tests (20 tests)
+npm run bench           # CPU microbenchmarks + Chromium SwiftShader benchmark -> docs/BENCHMARK.md
 ```
 
-- WebGL2 tests use SwiftShader software rasterisation inside headless CI (`playwright.config.ts`). For real GPU performance measurements, run `ATOMS_BENCH_GPU=hardware npm run bench` on a workstation with hardware acceleration.
-- Adding a new scientific provider must go through `src/science/providers.ts` and `src/science/coverageMatrix.ts` with explicit `EvidenceClass`, `EngineMetadata`, runtime validation checks, and concrete unavailability blockers when data or tools are missing.
+---
+
+## 3. Repository & Git Branching Note (`development/v0.6.0`)
+
+Because this workspace container was provisioned from an imported copy without a `.git` metadata directory or GitHub push credentials, all edits reside cleanly in the workspace tree. On a local clone of `mtabedi1390-design/atoms` with Git initialized, finalize the release branch via:
+
+```bash
+git checkout -b development/v0.6.0
+git status
+git add -A
+git commit -m "feat(v0.6.0): General Atomic Quantum Laboratory — domain, Dirac/Schrodinger engines, E1 spectroscopy, Worker experiments, 3D isosurfaces, and docs"
+git push -u origin development/v0.6.0
+```
+
+---
+
+## 4. Extending Physics Providers cleanly
+
+1. Implement `PhysicsProvider<AtomicSystem, QuantumState, TInput, CalculationResult<TOutput>>` in `src/physics/providers/`.
+2. Enforce exact system/nuclear/quantum validity inside `supports(system, state)` (never silently downgrade unsupported models).
+3. Register the provider in `createDefaultProviderRegistry()` (`src/physics/providers/registry.ts`).
+4. Add unit, numerical convergence, domain-rejection, and `Worker` integration tests before wiring UI controls.

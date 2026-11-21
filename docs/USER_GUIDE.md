@@ -1,31 +1,39 @@
-# ATOMS v0.5.0 — User Guide
+# ATOMS v0.6.0 — User Guide
 
-## 1. Layout Overview
-
-- **Top Telemetry Bar**: Displays the selected element (`symbol`, `name`, `Z`, atomic mass, NIST ground term), active quantum state or full-atom subshell count, open-shell/closed-shell indicator, physical observables ($\langle r \rangle$, $Z_{\text{eff}}$, energy, or total-density representation), active density source, integrated electron check ($\int\rho\,dV$), worker sampling timing, and live FPS/draw-call telemetry.
-- **Left Control Rail**:
-  1. **Element**: Interactive 118-element periodic table with search (`symbol`, `name`, or `Z`) and arrow-key keyboard navigation.
-  2. **Mode**: Toggle between **Single orbital $\psi_{nlm}$** (Model A exact hydrogenic ion vs Model B Slater-screened orbital) and **Full-atom density** (neutral multi-electron cloud).
-  3. **Full-atom density source**:
-     - **Dirac–Fock (Z=1–118)** (default): Lobato et al. (2026) all-electron relativistic B-spline Dirac–Fock spherical density across all 118 elements.
-     - **PySCF HF (offline)**: Bundled non-relativistic RHF/ROHF density (enabled for `H, He, C, N, O, Ne`; explicitly disabled where not computed).
-     - **Slater subshells**: Qualitative independent-electron configuration average with interactive per-subshell visibility checkboxes and opacity sliders.
-  4. **Orbital / subshell**: Select $(n, l, m)$, switch **Real (tesseral)** vs **Complex $Y_l^m$** basis, or inspect any occupied subshell.
-  5. **Sampling / Rendering / Cross-section slice**: Adjust Monte Carlo sample count (`25,000–300,000`), seed, adaptive FPS throttling, point size, brightness, log-relative density cutoff, axes/nucleus markers, probability current arrows ($\mathbf{j}$ for single-orbital complex $m \neq 0$), and XY/XZ/YZ slab slicing.
-- **Right Analysis Panel**:
-  - **Radial P(r)**: Plots $P_r(r) = r^2|R_{nl}(r)|^2$ (with radial nodes and analytic/numeric $\langle r \rangle$) in single-orbital or Slater subshell mode, and switches automatically to $P_{\text{total}}(r) = 4\pi r^2\rho(r)$ (with $\int 4\pi r^2\rho\,dr$ and numeric $\langle r \rangle$ per electron) when viewing Dirac–Fock or PySCF HF total density.
-  - **Levels**: Subshell level bars with separated display of NIST 1st ionization energy (experimental/evaluated vs predicted vs unavailable) and PySCF total HF energy.
-  - **Inspector**: Per-field provenance badges, active model limitations, observable-dependent provider selection, validation checks, external dataset blockers (Datatoms `1 ≤ N ≤ 10`, GRASP2018), and the per-element **Element × Observable Coverage** table.
+**ATOMS Laboratory (`v0.6.0`)** integrates 8 synchronized workspaces inside one client-local scientific application.
 
 ---
 
-## 2. URL Query Parameters
+## 1. Workspace Navigation (`WorkspaceNav`)
 
-You can link directly to reproducible states using URL parameters:
-- `?z=79` — Select element `Z` (`1..118`, e.g., `79` = Gold, `118` = Oganesson).
-- `&mode=single|atom` — Start in single-orbital or full-atom density mode.
-- `&source=dirac-fock|hf|model` — Select Full-atom density source (`dirac-fock` default).
-- `&samples=75000` — Initial particle sample count (`25000..300000`).
-- `&adaptive=0|1` — Enable/disable automatic sample reduction below 30 FPS.
+1. **Workbench**:
+   - Preserves the classic `v0.5` three-column 3D workstation (periodic table, sampling, rendering, cross-section slices, radial/levels/inspector panels).
+   - **New in v0.6.0 (`ControlRail`)**: Toggle **Schrödinger (NR)** vs **Dirac 4-spinor** (for single-orbital one-electron calculations, with `Total |Ψ|²`, `Large P`, and `Small Q` spinor component views), and enable **3D Isosurface (Marching Tetrahedra)** with adjustable isovalue (`5%–75%`), grid resolution (`24³`, `32³`, `40³`), and wireframe mode.
+2. **Atomic Systems**:
+   - Configure atomic number `Z = 1..118`, electron count `N` (neutral atoms, cations such as $\text{He}^+$, $\text{Fe}^{25+}$, or anions $N > Z$), isotopes (showing distinct bare nuclear mass $m_{\text{nuc}}$ vs neutral atomic mass $m_{\text{atom}}$ and exact reduced-mass ratio $\mu/m_e$), and nuclear charge model (`point-infinite-mass`, `point-finite-mass`, `finite-uniform`, `finite-fermi`).
+   - Inspect live provider compatibility (`supported`, `unsupported`, `unavailable`) and launch a reproducible Worker state experiment.
+3. **Quantum States**:
+   - Edit **Nonrelativistic** `(n, l, m_l, m_s, basis)` or **Relativistic Dirac** `(n, κ, j, m_j)` eigenstates with mathematical constraint enforcement.
+   - Inspect analytic binding & total energies, $\gamma = \sqrt{\kappa^2 - (Z\alpha)^2}$, spinor normalization $\int(|P|^2 + |Q|^2)dr$, large/small fraction decomposition, and live `RadialPlot`.
+4. **Energy Structure**:
+   - Side-by-side comparison of Schrödinger $E_n$, Sommerfeld–Dirac $E_{n\kappa}$ fine-structure doublets ($2p_{1/2}$ vs $2p_{3/2}$), separated NIST 1st ionization energies (`evaluated` / `predicted` / `unavailable`), and PySCF total HF electronic energies where bundled.
+5. **Transitions**:
+   - Evaluate Nonrelativistic Schrödinger and Relativistic Dirac electric-dipole (`E1`) transitions between initial and final states.
+   - Inspect selection-rule diagnostics (`E1 ALLOWED` / `E1 FORBIDDEN`), radial integrals, spherical polarization channels ($q = -1, 0, +1$), oscillator strength $f_{if}$, Einstein $A_{fi}$, $\Delta E$, vacuum $\lambda$, and quadrature convergence residual.
+6. **Spectroscopy**:
+   - Synthesize discrete vacuum emission/absorption stick spectra across `Lyman`, `Balmer`, `Paschen`, or `Custom` $(n_{\max}, [\lambda_{\min}, \lambda_{\max}])$ directly from calculated E1 matrix elements.
+   - Compare relativistic Dirac vs Schrödinger overlay lines and NIST $^1\text{H}$ vacuum centroids cleanly (zero empirical broadening or thermal populations assumed).
+7. **Analysis**:
+   - Inspect live **2D XY / XZ / YZ mathematical cross-section heatmaps** (`Slice2DCanvas`), radial probability distributions ($P(r)$, Dirac $P/Q$, or total $4\pi r^2\rho(r)$), exact analytical $\langle r^k \rangle$ expectation values, and full `v0.5` provenance & 118-element coverage matrix (`Inspector`).
+8. **Experiment History**:
+   - Manage locally persisted IndexedDB (`atoms_laboratory_db`) experiment runs.
+   - Distinguishes **Load / Replay** (`source: loaded-from-store`) from **Rerun Calculation** (`source: computed`, incrementing `recomputedCount`).
+   - Cancel in-flight Worker executions, delete entries, and **Export / Import** schema-validated `atoms-experiment-bundle` JSON files (malformed or unsupported versions are rejected safely).
 
-Example: `/?z=26&mode=atom&source=dirac-fock` opens Iron (`Z = 26`) in relativistic Dirac–Fock full-atom view; `/?z=10&mode=atom&source=model` opens Neon's Slater-screened subshell layer controls.
+---
+
+## 2. Preserved `v0.5` URL Query Parameters
+
+Direct reproducible deep-links continue to work on boot:
+- `?z=79&mode=atom&source=dirac-fock` — Iron/Gold/etc. in Lobato 2026 Dirac–Fock full-atom view
+- `?z=10&mode=atom&source=model&samples=75000&adaptive=0` — Neon Slater subshell decomposition without adaptive FPS reduction
