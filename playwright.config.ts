@@ -30,9 +30,9 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: "npx vite preview --port 4173 --strictPort --host 127.0.0.1",
+    command: "NODE_ENV=production PORT=4173 node server.ts",
     url: "http://127.0.0.1:4173",
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

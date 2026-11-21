@@ -23,7 +23,8 @@ export type ExperimentKind =
   | "single-state"
   | "energy-spectrum"
   | "e1-transition"
-  | "spectroscopy-series";
+  | "spectroscopy-series"
+  | "multi-electron-hf";
 
 export type ExperimentStatus =
   | "queued"

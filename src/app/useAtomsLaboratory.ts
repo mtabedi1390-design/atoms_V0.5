@@ -18,6 +18,7 @@ import {
   type NuclearModel,
 } from "@/domain/atomic";
 import {
+  createMultiElectronHFState,
   createNonRelativisticState,
   createRelativisticState,
   jFromKappa,
@@ -44,6 +45,20 @@ import {
 import { ExperimentSerializer } from "@/experiments/persistence/serializer";
 import { ExperimentWorkerClient } from "@/workers/experimentClient";
 import { createBrowserExperimentWorker } from "@/workers/browserWorkerFactory";
+import {
+  defaultHttpHFTransport,
+  probeHFCapabilities,
+  type HFBasisId,
+  type HFCalculationResponse,
+  type HFCapabilitiesResponse,
+  type HFMethod,
+  type HFOccupationMode,
+  type HFSCFOptions,
+  type HFVolumeGridPayload,
+  type HFVolumeGridSpec,
+  type SubshellOccupation,
+} from "@/physics/hf";
+import { PYSCF_LIVE_PROVIDER_ID, PYSCF_LIVE_PROVIDER_VERSION } from "@/physics/providers/hartreeFock";
 import type { DiracComponentView } from "@/workers/visualization.worker";
 
 export type WorkspaceId =
@@ -53,6 +68,7 @@ export type WorkspaceId =
   | "energy-structure"
   | "transitions"
   | "spectroscopy"
+  | "hartree-fock"
   | "analysis"
   | "experiment-history";
 
@@ -63,6 +79,14 @@ export interface SavedExperimentEntry {
   readonly executions: readonly ExperimentExecution[];
   readonly results: readonly ExperimentResultRecord[];
   readonly latestResult?: ExperimentResultRecord;
+}
+
+export interface HFWorkbenchOverlay {
+  readonly title: string;
+  readonly method: HFMethod;
+  readonly basis: HFBasisId;
+  readonly symbol: string;
+  readonly grid: HFVolumeGridPayload;
 }
 
 export interface LaboratoryConfig {
@@ -80,6 +104,7 @@ export interface LaboratoryConfig {
   readonly isoFraction: number;
   readonly isoResolution: 24 | 32 | 40;
   readonly isoWireframe: boolean;
+  readonly showHFVolumeInWorkbench: boolean;
   readonly spectroscopySeries: SpectralSeriesKind;
   readonly spectroscopyMode: SpectrumMode;
   readonly spectroscopyCustomLowerN: number;
@@ -129,6 +154,7 @@ export function useAtomsLaboratory(
     isoFraction: 0.25,
     isoResolution: 24,
     isoWireframe: false,
+    showHFVolumeInWorkbench: false,
     spectroscopySeries: "balmer",
     spectroscopyMode: "emission",
     spectroscopyCustomLowerN: 4,
@@ -216,7 +242,25 @@ export function useAtomsLaboratory(
   const [selectedExperimentId, setSelectedExperimentId] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<ExperimentResultRecord | null>(null);
   const [platformNotice, setPlatformNotice] = useState<string | null>(null);
+  const [hfCapabilities, setHfCapabilities] = useState<HFCapabilitiesResponse | null>(null);
+  const [hfProbing, setHfProbing] = useState<boolean>(false);
+  const [hfWorkbenchOverlay, setHfWorkbenchOverlay] = useState<HFWorkbenchOverlay | null>(null);
   const activeHandles = useRef(new Map<string, { cancel: (reason?: string) => void }>());
+
+  const refreshHFCapabilities = useCallback(async () => {
+    setHfProbing(true);
+    try {
+      const cap = await probeHFCapabilities(defaultHttpHFTransport);
+      setHfCapabilities(cap);
+      return cap;
+    } finally {
+      setHfProbing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshHFCapabilities();
+  }, [refreshHFCapabilities]);
 
   const refreshStore = useCallback(async () => {
     const store = storeRef.current;
@@ -359,6 +403,90 @@ export function useAtomsLaboratory(
     [atomicSystem, config, submitExperiment],
   );
 
+  const runHartreeFockExperiment = useCallback(
+    async (params: {
+      readonly Z: number;
+      readonly N: number;
+      readonly spin2S: number;
+      readonly method: HFMethod;
+      readonly basis: HFBasisId;
+      readonly occupationMode: HFOccupationMode;
+      readonly subshellOccupations: readonly SubshellOccupation[];
+      readonly useSymmetry: boolean;
+      readonly scfOptions: HFSCFOptions;
+      readonly volumeGrid?: HFVolumeGridSpec;
+    }) => {
+      const iso = defaultIsotopeForZ(params.Z);
+      const hfSystem = createAtomicSystem({
+        Z: params.Z,
+        N: params.N,
+        massNumber: iso.massNumber,
+        nuclearModel: createNuclearModelForIsotope("point-infinite-mass", iso),
+      });
+      const hfState = createMultiElectronHFState({
+        N: params.N,
+        method: params.method,
+        basis: params.basis,
+        occupationMode: params.occupationMode,
+        spin2S: params.spin2S,
+        subshellOccupations: params.subshellOccupations,
+        useSymmetry: params.useSymmetry,
+        scfOptions: params.scfOptions,
+        volumeGrid: params.volumeGrid,
+      });
+      const observables = [
+        "multi-electron-hf",
+        "total-energy",
+        "orbital-resolved-hf",
+        "total-spherical-density",
+        "radial-probability",
+        "scf-diagnostics",
+        ...(params.method === "uhf" || params.method === "rohf" ? (["spin-density"] as const) : []),
+        ...(params.volumeGrid?.enabled ? (["spatial-density"] as const) : []),
+      ] as const;
+
+      const chargeTag =
+        hfSystem.q === 0 ? "" : hfSystem.q > 0 ? `+${hfSystem.q}` : `${hfSystem.q}`;
+      const def = createExperimentDefinition({
+        kind: "multi-electron-hf",
+        title: `${hfSystem.species.symbol}${chargeTag} ${params.method.toUpperCase()}/${params.basis}`,
+        system: hfSystem,
+        quantumStates: [hfState],
+        providerId: PYSCF_LIVE_PROVIDER_ID,
+        providerVersion: PYSCF_LIVE_PROVIDER_VERSION,
+        observables: [...observables],
+        modelParameters: {
+          method: params.method,
+          basis: params.basis,
+          occupationMode: params.occupationMode,
+          spin2S: params.spin2S,
+          useSymmetry: params.useSymmetry,
+        },
+        numericalParameters: {
+          convTol: params.scfOptions.convTol ?? 1e-9,
+          maxCycle: params.scfOptions.maxCycle ?? 80,
+          initGuess: params.scfOptions.initGuess ?? "minao",
+          diis: params.scfOptions.diis ?? "cdiis",
+        },
+      });
+      const outcome = await submitExperiment(def);
+      if (outcome?.result) {
+        const resPayload = outcome.result.payload as HFCalculationResponse;
+        if (resPayload.volumeGrid) {
+          setHfWorkbenchOverlay({
+            title: def.title,
+            method: params.method,
+            basis: params.basis,
+            symbol: hfSystem.species.symbol,
+            grid: resPayload.volumeGrid,
+          });
+        }
+      }
+      return outcome;
+    },
+    [submitExperiment],
+  );
+
   const cancelExecution = useCallback((executionId: string) => {
     activeHandles.current.get(executionId)?.cancel("Cancelled from ATOMS Laboratory UI");
   }, []);
@@ -465,9 +593,15 @@ export function useAtomsLaboratory(
     selectedExperimentId,
     selectedResult,
     platformNotice,
+    hfCapabilities,
+    hfProbing,
+    hfWorkbenchOverlay,
+    setHfWorkbenchOverlay,
+    refreshHFCapabilities,
     runSingleStateExperiment,
     runTransitionExperiment,
     runSpectroscopyExperiment,
+    runHartreeFockExperiment,
     cancelExecution,
     replayStoredExperiment,
     rerunStoredExperiment,

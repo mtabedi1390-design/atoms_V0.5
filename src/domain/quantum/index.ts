@@ -8,6 +8,17 @@
  */
 import type { AngularBasis } from "@/physics/hydrogenic";
 import { SUBSHELL_LETTERS } from "@/physics/hydrogenic";
+import {
+  formatSubshellConfiguration,
+  validateMethodForSpin,
+  validateSubshellOccupations,
+  type HFBasisId,
+  type HFMethod,
+  type HFOccupationMode,
+  type HFSCFOptions,
+  type HFVolumeGridSpec,
+  type SubshellOccupation,
+} from "@/physics/hf";
 import { assertValid, validationFromIssues, type ValidationIssue, type ValidationResult } from "../validation";
 
 export interface NonRelativisticState {
@@ -48,11 +59,25 @@ export interface ConfigurationAverageState {
   readonly focusSubshell?: { readonly n: number; readonly l: number };
 }
 
+export interface MultiElectronHFState {
+  readonly kind: "multi-electron-hf";
+  readonly N: number;
+  readonly method: HFMethod;
+  readonly basis: HFBasisId;
+  readonly occupationMode: HFOccupationMode;
+  readonly spin2S: number;
+  readonly subshellOccupations: readonly SubshellOccupation[];
+  readonly useSymmetry: boolean;
+  readonly scfOptions?: HFSCFOptions;
+  readonly volumeGrid?: HFVolumeGridSpec;
+}
+
 export type QuantumState =
   | NonRelativisticState
   | RelativisticState
   | SuperpositionState
-  | ConfigurationAverageState;
+  | ConfigurationAverageState
+  | MultiElectronHFState;
 
 export interface TransitionPair<TState extends NonRelativisticState | RelativisticState = NonRelativisticState | RelativisticState> {
   readonly initial: TState;
@@ -149,6 +174,14 @@ export function validateNonRelativisticState(s: NonRelativisticState): Validatio
   return validationFromIssues(issues);
 }
 
+export function createMultiElectronHFState(
+  params: Omit<MultiElectronHFState, "kind">,
+): MultiElectronHFState {
+  const s: MultiElectronHFState = { kind: "multi-electron-hf", ...params };
+  assertValid(validateMultiElectronHFState(s), "createMultiElectronHFState");
+  return s;
+}
+
 export function validateRelativisticState(s: RelativisticState): ValidationResult {
   const issues: ValidationIssue[] = [];
   if (!Number.isInteger(s.n) || s.n < 1) {
@@ -217,6 +250,21 @@ export function validateSuperpositionState(s: SuperpositionState): ValidationRes
   return validationFromIssues(issues);
 }
 
+export function validateMultiElectronHFState(s: MultiElectronHFState): ValidationResult {
+  const occVal = validateSubshellOccupations(s.N, s.spin2S, s.subshellOccupations);
+  const methodVal = validateMethodForSpin(s.method, s.spin2S);
+  const issues = [...occVal.issues, ...methodVal.issues];
+  if (s.scfOptions?.maxCycle !== undefined && (s.scfOptions.maxCycle < 1 || s.scfOptions.maxCycle > 300)) {
+    issues.push({
+      severity: "error",
+      code: "HF_INVALID_MAX_CYCLE",
+      field: "scfOptions.maxCycle",
+      message: `maxCycle must be between 1 and 300 (got ${s.scfOptions.maxCycle}).`,
+    });
+  }
+  return validationFromIssues(issues);
+}
+
 export function validateQuantumState(s: QuantumState): ValidationResult {
   switch (s.kind) {
     case "nonrelativistic":
@@ -231,6 +279,8 @@ export function validateQuantumState(s: QuantumState): ValidationResult {
           ? []
           : [{ severity: "error", code: "INVALID_Z", field: "Z", message: `Z must be in 1..118 (got ${s.Z})` }],
       );
+    case "multi-electron-hf":
+      return validateMultiElectronHFState(s);
   }
 }
 
@@ -256,5 +306,9 @@ export function formatQuantumStateLabel(s: QuantumState): string {
       return `${s.basisKind} superposition (${s.terms.length} terms)`;
     case "configuration-average":
       return `Z=${s.Z} config-avg (${s.densitySource})`;
+    case "multi-electron-hf": {
+      const cfg = formatSubshellConfiguration(s.subshellOccupations);
+      return `${s.method.toUpperCase()}/${s.basis} (${cfg || `N=${s.N}`}, 2S=${s.spin2S})`;
+    }
   }
 }

@@ -70,6 +70,23 @@ const BUILTIN_EXPERIMENT_DESCRIPTORS: readonly ExperimentKindDescriptor[] = [
     defaultObservables: ["spectroscopy", "e1-transitions"],
     implementedInCurrentRelease: true,
   },
+  {
+    kind: "multi-electron-hf",
+    label: "Multi-Electron Hartree–Fock SCF",
+    description: "Self-consistent RHF, UHF, ROHF, or spherically averaged atomic HF calculation returning orbitals, electron/spin densities, energy decomposition, and SCF convergence history.",
+    minStates: 1,
+    maxStates: 1,
+    requiresTransition: false,
+    defaultObservables: [
+      "multi-electron-hf",
+      "total-energy",
+      "orbital-resolved-hf",
+      "total-spherical-density",
+      "radial-probability",
+      "scf-diagnostics",
+    ],
+    implementedInCurrentRelease: true,
+  },
 ];
 
 export class ExperimentRegistry {

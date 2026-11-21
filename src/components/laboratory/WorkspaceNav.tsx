@@ -12,6 +12,7 @@ export const WORKSPACES: readonly WorkspaceDescriptor[] = [
   { id: "energy-structure", label: "Energy Structure" },
   { id: "transitions", label: "Transitions" },
   { id: "spectroscopy", label: "Spectroscopy" },
+  { id: "hartree-fock", label: "Hartree–Fock" },
   { id: "analysis", label: "Analysis" },
   { id: "experiment-history", label: "Experiment History" },
 ];
@@ -30,7 +31,7 @@ export function WorkspaceNav({ active, onSelect, activeCount = 0 }: WorkspaceNav
     >
       <div role="tablist" aria-label="Laboratory views" className="flex items-center gap-1 whitespace-nowrap">
         <span className="mr-1.5 font-mono text-[10px] font-semibold tracking-wider text-amber-300 uppercase">
-          ATOMS Lab v0.6
+          ATOMS Lab v0.7
         </span>
         {WORKSPACES.map((w) => {
           const isActive = w.id === active;

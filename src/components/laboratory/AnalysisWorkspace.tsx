@@ -4,6 +4,7 @@ import type { AtomicSystem } from "@/domain/atomic";
 import { lFromKappa, type NonRelativisticState, type RelativisticState } from "@/domain/quantum";
 import {
   evaluate2DSlice,
+  slice2DFromVolumeGrid,
   type FieldQuantity,
   type SlicePlaneKind,
 } from "@/numerics/isosurface/marchingTetrahedra";
@@ -20,7 +21,7 @@ import {
 } from "@/physics/providers/dirac";
 import type { Selection } from "@/science/providers";
 import type { ModelId } from "@/physics/models";
-import type { LaboratoryConfig } from "@/app/useAtomsLaboratory";
+import type { HFWorkbenchOverlay, LaboratoryConfig } from "@/app/useAtomsLaboratory";
 import { RadialPlot, type DiracRadialView, type TotalRadialDensityView } from "@/components/RadialPlot";
 import { Slice2DCanvas } from "@/components/Slice2DCanvas";
 import { Inspector } from "@/components/Inspector";
@@ -38,6 +39,7 @@ interface Props {
   readonly providerSelection: Selection;
   readonly totalRadialView: TotalRadialDensityView | null;
   readonly electrons: number | null;
+  readonly hfWorkbenchOverlay?: HFWorkbenchOverlay | null;
 }
 
 export function AnalysisWorkspace({
@@ -52,10 +54,12 @@ export function AnalysisWorkspace({
   providerSelection,
   totalRadialView,
   electrons,
+  hfWorkbenchOverlay,
 }: Props) {
   const [plane, setPlane] = useState<SlicePlaneKind>("xz");
   const [sliceQuantity, setSliceQuantity] = useState<"density" | "wavefunction-signed">("wavefunction-signed");
   const [offsetBohr, setOffsetBohr] = useState(0);
+  const [sliceSource, setSliceSource] = useState<"state" | "hf">("state");
 
   const isOneElectron = system.N === 1;
   const pointNucleus =
@@ -68,7 +72,12 @@ export function AnalysisWorkspace({
     [nrState.n, nrState.l, isOneElectron, system.Z, zeff, aScale],
   );
 
+  const usingHfSlice = sliceSource === "hf" && Boolean(hfWorkbenchOverlay);
+
   const sliceData = useMemo(() => {
+    if (usingHfSlice && hfWorkbenchOverlay) {
+      return slice2DFromVolumeGrid(hfWorkbenchOverlay.grid, plane, offsetBohr);
+    }
     if (activeState.kind === "relativistic" && !checkDiracCoulombDomain(system.Z, activeState.kappa).valid) {
       return null;
     }
@@ -86,7 +95,7 @@ export function AnalysisWorkspace({
         quantity,
       },
     );
-  }, [activeState, system.Z, system.reducedMassRatio, isOneElectron, zeff, sliceQuantity, plane, offsetBohr, extentBohr]);
+  }, [usingHfSlice, hfWorkbenchOverlay, activeState, system.Z, system.reducedMassRatio, isOneElectron, zeff, sliceQuantity, plane, offsetBohr, extentBohr]);
 
   const diracAnalysis = useMemo(() => {
     if (config.theoryMode !== "dirac" || !isOneElectron || !pointNucleus) return null;
@@ -125,6 +134,16 @@ export function AnalysisWorkspace({
       <div className="flex flex-col gap-3">
         <Panel title="2D Quantitative Cross-Section Slice">
           <div className="mb-2 flex flex-col gap-2">
+            {hfWorkbenchOverlay && (
+              <Seg
+                value={sliceSource}
+                onChange={(v) => setSliceSource(v)}
+                options={[
+                  { v: "state", label: "Active 1-e / Slater State" },
+                  { v: "hf", label: `PySCF HF (${hfWorkbenchOverlay.title})` },
+                ]}
+              />
+            )}
             <Seg
               value={plane}
               onChange={(p) => setPlane(p)}
@@ -134,7 +153,7 @@ export function AnalysisWorkspace({
                 { v: "yz", label: "YZ (x=c)" },
               ]}
             />
-            {activeState.kind === "nonrelativistic" && (
+            {activeState.kind === "nonrelativistic" && !usingHfSlice && (
               <Seg
                 value={sliceQuantity}
                 onChange={(m) => setSliceQuantity(m)}
@@ -147,16 +166,22 @@ export function AnalysisWorkspace({
             <Slider
               label="Slice offset (a₀)"
               value={offsetBohr}
-              min={-extentBohr * 0.6}
-              max={extentBohr * 0.6}
-              step={extentBohr / 40}
+              min={-(usingHfSlice && hfWorkbenchOverlay ? hfWorkbenchOverlay.grid.extentBohr : extentBohr) * 0.6}
+              max={(usingHfSlice && hfWorkbenchOverlay ? hfWorkbenchOverlay.grid.extentBohr : extentBohr) * 0.6}
+              step={(usingHfSlice && hfWorkbenchOverlay ? hfWorkbenchOverlay.grid.extentBohr : extentBohr) / 40}
               onChange={setOffsetBohr}
               format={(v) => `${v.toFixed(2)} a₀`}
             />
           </div>
           <Slice2DCanvas
             slice={sliceData}
-            label={activeState.kind === "relativistic" ? "Dirac |Ψ|²" : `ψ_${nrState.n}${SUBSHELL_LETTERS[nrState.l] ?? ""}`}
+            label={
+              usingHfSlice && hfWorkbenchOverlay
+                ? `PySCF ${hfWorkbenchOverlay.method.toUpperCase()} (${hfWorkbenchOverlay.grid.quantity})`
+                : activeState.kind === "relativistic"
+                  ? "Dirac |Ψ|²"
+                  : `ψ_${nrState.n}${SUBSHELL_LETTERS[nrState.l] ?? ""}`
+            }
           />
         </Panel>
       </div>

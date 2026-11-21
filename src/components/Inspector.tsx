@@ -75,7 +75,7 @@ export function Inspector({ element: e, model, sub, m, basis, providerSelection,
         <Row label="Relativistic">{M.relativistic}</Row>
         <Row label="Correlation">{M.correlation}</Row>
         <Row label="Nuclear model">{M.nuclearModel}</Row>
-        <Row label="Engine / version">ATOMS TS core v0.6.1</Row>
+        <Row label="Engine / version">ATOMS TS core + PySCF v0.7.0</Row>
         <Row label="Constants">{CONSTANTS.name}</Row>
       </div>
 

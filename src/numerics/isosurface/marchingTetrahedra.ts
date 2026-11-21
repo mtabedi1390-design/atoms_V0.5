@@ -368,3 +368,122 @@ export function evaluate2DSlice(
     isSigned: opts.quantity === "wavefunction-signed" && minVal < 0,
   };
 }
+
+/**
+ * Extracts Marching Tetrahedra 3D isosurfaces directly from an externally computed
+ * PySCF volumetric grid (layout: idx = ix + N * (iy + N * iz)).
+ */
+export function extractIsosurfacesFromVolumeGrid(
+  grid: {
+    readonly gridN: number;
+    readonly extentBohr: number;
+    readonly signed: boolean;
+    readonly values: readonly number[] | Float32Array;
+  },
+  isoFraction = 0.2,
+): IsosurfaceExtractionResult {
+  const N = grid.gridN;
+  const expectedLen = N * N * N;
+  if (grid.values.length !== expectedLen) {
+    throw new RangeError(`Expected ${expectedLen} volume samples for gridN=${N}, got ${grid.values.length}.`);
+  }
+  const field = grid.values instanceof Float32Array ? grid.values : Float32Array.from(grid.values);
+  let fieldMin = Infinity;
+  let fieldMax = -Infinity;
+  let maxAbs = 0;
+  for (let i = 0; i < field.length; i++) {
+    const v = field[i];
+    if (v < fieldMin) fieldMin = v;
+    if (v > fieldMax) fieldMax = v;
+    const av = Math.abs(v);
+    if (av > maxAbs) maxAbs = av;
+  }
+
+  const frac = Math.max(0.005, Math.min(0.95, isoFraction));
+  const meshes: IsosurfaceMeshBuffers[] = [];
+  if (grid.signed) {
+    const isoPos = maxAbs * frac;
+    const isoNeg = -isoPos;
+    if (fieldMax > isoPos) {
+      meshes.push(extractSingleLevelSurface(field, N, grid.extentBohr, isoPos, "positive"));
+    }
+    if (fieldMin < isoNeg) {
+      meshes.push(extractSingleLevelSurface(field, N, grid.extentBohr, isoNeg, "negative"));
+    }
+  } else if (maxAbs > 0) {
+    const iso = maxAbs * frac;
+    meshes.push(extractSingleLevelSurface(field, N, grid.extentBohr, iso, "density"));
+  }
+
+  return {
+    meshes,
+    extentBohr: grid.extentBohr,
+    extentPm: grid.extentBohr * BOHR_PM,
+    resolution: N,
+    fieldMax,
+    fieldMin,
+  };
+}
+
+/**
+ * Interpolates a 2D planar cross-section out of an externally computed PySCF 3D volume grid.
+ */
+export function slice2DFromVolumeGrid(
+  grid: {
+    readonly gridN: number;
+    readonly extentBohr: number;
+    readonly signed: boolean;
+    readonly values: readonly number[] | Float32Array;
+  },
+  plane: SlicePlaneKind,
+  offsetBohr = 0,
+): Slice2DResult {
+  const N = grid.gridN;
+  const values = new Float32Array(N * N);
+  const clamped = Math.max(-grid.extentBohr, Math.min(grid.extentBohr, offsetBohr));
+  const tCoord = ((clamped + grid.extentBohr) / (2 * grid.extentBohr)) * (N - 1);
+  const k0 = Math.max(0, Math.min(N - 1, Math.floor(tCoord)));
+  const k1 = Math.max(0, Math.min(N - 1, k0 + 1));
+  const alpha = tCoord - k0;
+
+  const at = (ix: number, iy: number, iz: number) => grid.values[ix + N * (iy + N * iz)];
+  let minVal = Infinity;
+  let maxVal = -Infinity;
+  let maxAbs = 0;
+  let ptr = 0;
+
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      let v0 = 0;
+      let v1 = 0;
+      if (plane === "xy") {
+        v0 = at(i, j, k0);
+        v1 = at(i, j, k1);
+      } else if (plane === "xz") {
+        v0 = at(i, k0, j);
+        v1 = at(i, k1, j);
+      } else {
+        v0 = at(k0, i, j);
+        v1 = at(k1, i, j);
+      }
+      const v = v0 * (1 - alpha) + v1 * alpha;
+      values[ptr++] = v;
+      if (v < minVal) minVal = v;
+      if (v > maxVal) maxVal = v;
+      if (Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
+    }
+  }
+
+  return {
+    plane,
+    offsetBohr: clamped,
+    extentBohr: grid.extentBohr,
+    extentPm: grid.extentBohr * BOHR_PM,
+    resolution: N,
+    values,
+    maxAbs,
+    minVal,
+    maxVal,
+    isSigned: grid.signed && minVal < 0,
+  };
+}

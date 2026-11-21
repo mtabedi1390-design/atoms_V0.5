@@ -14,10 +14,14 @@ import { TransitionsWorkspace } from "@/components/laboratory/TransitionsWorkspa
 import { SpectroscopyWorkspace } from "@/components/laboratory/SpectroscopyWorkspace";
 import { AnalysisWorkspace } from "@/components/laboratory/AnalysisWorkspace";
 import { ExperimentHistoryWorkspace } from "@/components/laboratory/ExperimentHistoryWorkspace";
+import { HartreeFockWorkspace } from "@/components/laboratory/HartreeFockWorkspace";
 import { useAtomsLaboratory } from "@/app/useAtomsLaboratory";
 import { elementByZ } from "@/data/elements";
 import { lFromKappa } from "@/domain/quantum";
-import type { FieldQuantity } from "@/numerics/isosurface/marchingTetrahedra";
+import {
+  extractIsosurfacesFromVolumeGrid,
+  type FieldQuantity,
+} from "@/numerics/isosurface/marchingTetrahedra";
 import { diracFockRadialGrid } from "@/physics/diracFock";
 import { BOHR_PM, SUBSHELL_LETTERS, radialExtent } from "@/physics/hydrogenic";
 import { effectiveZ } from "@/physics/models";
@@ -191,7 +195,12 @@ export default function App() {
     });
   }, [state.mode, state.n, state.l, state.m, state.model, state.basis, state.count, state.seed, state.layers, element, sub, layerColors, useDF, useHF, dfGrid, hfDataset]);
 
+  const hfOverlayActive = Boolean(lab.config.showHFVolumeInWorkbench && lab.hfWorkbenchOverlay);
+
   const extentPm = useMemo(() => {
+    if (hfOverlayActive && lab.hfWorkbenchOverlay) {
+      return lab.hfWorkbenchOverlay.grid.extentBohr * BOHR_PM;
+    }
     if (useDF) {
       return Math.min(dfGrid.rMaxBohr, 18) * BOHR_PM;
     }
@@ -201,7 +210,7 @@ export default function App() {
       return radialExtent(lab.diracState.n, l, state.Z, 1 / lab.atomicSystem.reducedMassRatio) * BOHR_PM;
     }
     return Math.max(...specs.map((s) => radialExtent(s.params.n, s.params.l, s.params.zeff))) * BOHR_PM;
-  }, [specs, useDF, useHF, dfGrid, hfDataset, useDiracWorkbench, lab.diracState, lab.atomicSystem.reducedMassRatio, state.Z]);
+  }, [hfOverlayActive, lab.hfWorkbenchOverlay, specs, useDF, useHF, dfGrid, hfDataset, useDiracWorkbench, lab.diracState, lab.atomicSystem.reducedMassRatio, state.Z]);
 
   // Effective render settings enforcing honest colorMode boundaries
   const effectiveRender = useMemo(() => {
@@ -289,10 +298,19 @@ export default function App() {
     }
   }, [extentPm]);
 
-  // ---- sampling requests (Schrodinger / Total-density OR Dirac 4-spinor) ----
+  // ---- sampling requests (Schrodinger / Total-density OR Dirac 4-spinor OR PySCF HF volume overlay) ----
   useEffect(() => {
     const scene = sceneRef.current, client = clientRef.current, visClient = visClientRef.current;
     if (!scene || !client) return;
+
+    if (hfOverlayActive) {
+      scene.removeLayersExcept(new Set());
+      client.cancelAllExcept(new Set());
+      lastParams.current.clear();
+      setProgress(1);
+      setElectrons(null);
+      return;
+    }
 
     if (useDiracWorkbench && visClient) {
       const keep = new Set(["single"]);
@@ -383,6 +401,7 @@ export default function App() {
       setElectrons([...electronTotals.current.values()].reduce((a, b) => a + b, 0));
     }
   }, [
+    hfOverlayActive,
     specs,
     state.mode,
     useDiracWorkbench,
@@ -399,6 +418,16 @@ export default function App() {
     const scene = sceneRef.current;
     const visClient = visClientRef.current;
     if (!scene) return;
+
+    if (hfOverlayActive && lab.hfWorkbenchOverlay) {
+      const t0 = performance.now();
+      const surface = extractIsosurfacesFromVolumeGrid(lab.hfWorkbenchOverlay.grid, lab.config.isoFraction);
+      scene.setIsosurfaceMeshes(surface.meshes, { wireframe: lab.config.isoWireframe, opacity: 0.72 });
+      const triangles = surface.meshes.reduce((acc, m) => acc + m.triangleCount, 0);
+      setIsoStatus({ triangles, ms: performance.now() - t0 });
+      return;
+    }
+
     if (!lab.config.showIsosurface || state.mode !== "single" || !visClient) {
       scene.clearIsosurfaces();
       setIsoStatus(null);
@@ -435,6 +464,8 @@ export default function App() {
       (msg) => setWorkerError(msg),
     );
   }, [
+    hfOverlayActive,
+    lab.hfWorkbenchOverlay,
     lab.config.showIsosurface,
     lab.config.isoFraction,
     lab.config.isoResolution,
@@ -458,7 +489,7 @@ export default function App() {
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    const show = state.showCurrent && state.mode === "single" && !useDiracWorkbench && state.basis === "complex" && state.m !== 0;
+    const show = !hfOverlayActive && state.showCurrent && state.mode === "single" && !useDiracWorkbench && state.basis === "complex" && state.m !== 0;
     const zeff = effectiveZ(state.model, element, sub);
     scene.setCurrentField(show ? { q: { n: state.n, l: state.l, m: state.m }, zeff, rMaxBohr: radialExtent(state.n, state.l, zeff) * 0.6 } : null);
   }, [state.showCurrent, state.mode, state.basis, state.n, state.l, state.m, state.model, element, sub, useDiracWorkbench]);
@@ -550,24 +581,38 @@ export default function App() {
           )}
           <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1 text-[10px] text-zinc-400">
             <ScaleBar extentPm={extentPm} />
-            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.6.1</span>
-            {effectiveRender.colorMode === "phase-real" && <span><span className="text-orange-400">■ ψ &gt; 0</span> <span className="text-blue-400">■ ψ &lt; 0</span> — sign of the real wavefunction (not density)</span>}
-            {effectiveRender.colorMode === "phase-complex" && <span>hue = arg ψ ∈ (−π, π] — complex phase e<sup>imφ</sup>; brightness ∝ log|ψ|²</span>}
-            {effectiveRender.colorMode === "density" && <span>colour/brightness ∝ log-relative density (black→violet→red→yellow→white)</span>}
-            {state.mode === "atom" && !isTotalDensityOnly && <span>independent-electron density ρ = Σ Nᵢ|Rᵢ|²/(4π) (configuration-average, Unsöld). Brightness uses a <b>shared</b> cross-subshell normalisation; point count ∝ occupancy. Not a correlated many-electron density.</span>}
-            {useDF && <span className="text-sky-300">Lobato et al. (2026) relativistic B-spline Dirac–Fock total spherical density (finite nucleus, spherical average). Subshell orbitals &amp; phase are not resolved.</span>}
-            {useHF && <span className="text-sky-300">imported PySCF {hfDataset?.method}/{hfDataset?.basis} spherically averaged HF density (basis-set-limited, non-relativistic). Not experimental.</span>}
-            {useDiracWorkbench && <span className="text-sky-300">Dirac–Coulomb 4-spinor sampling ({lab.config.diracComponentView} view): P and Q are coupled spinor components of one eigenstate, not separate orbitals.</span>}
-            {lab.config.showIsosurface && (
+            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.7.0</span>
+            {hfOverlayActive && lab.hfWorkbenchOverlay && (
+              <div className="pointer-events-auto flex items-center gap-2 rounded-sm border border-sky-800 bg-sky-950/75 px-2 py-1 text-sky-200">
+                <span>
+                  PySCF {lab.hfWorkbenchOverlay.title} · {lab.hfWorkbenchOverlay.grid.quantity} (MO#{lab.hfWorkbenchOverlay.grid.orbitalIndex}, {lab.hfWorkbenchOverlay.grid.gridN}³ grid, {isoStatus?.triangles.toLocaleString() ?? 0} triangles)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => lab.patchConfig({ showHFVolumeInWorkbench: false })}
+                  className="rounded-sm border border-sky-600 px-1.5 py-0.5 text-[10px] hover:bg-sky-900"
+                >
+                  Exit HF Overlay
+                </button>
+              </div>
+            )}
+            {effectiveRender.colorMode === "phase-real" && !hfOverlayActive && <span><span className="text-orange-400">■ ψ &gt; 0</span> <span className="text-blue-400">■ ψ &lt; 0</span> — sign of the real wavefunction (not density)</span>}
+            {effectiveRender.colorMode === "phase-complex" && !hfOverlayActive && <span>hue = arg ψ ∈ (−π, π] — complex phase e<sup>imφ</sup>; brightness ∝ log|ψ|²</span>}
+            {effectiveRender.colorMode === "density" && !hfOverlayActive && <span>colour/brightness ∝ log-relative density (black→violet→red→yellow→white)</span>}
+            {state.mode === "atom" && !isTotalDensityOnly && !hfOverlayActive && <span>independent-electron density ρ = Σ Nᵢ|Rᵢ|²/(4π) (configuration-average, Unsöld). Brightness uses a <b>shared</b> cross-subshell normalisation; point count ∝ occupancy. Not a correlated many-electron density.</span>}
+            {useDF && !hfOverlayActive && <span className="text-sky-300">Lobato et al. (2026) relativistic B-spline Dirac–Fock total spherical density (finite nucleus, spherical average). Subshell orbitals &amp; phase are not resolved.</span>}
+            {useHF && !hfOverlayActive && <span className="text-sky-300">imported PySCF {hfDataset?.method}/{hfDataset?.basis} spherically averaged HF density (basis-set-limited, non-relativistic). Not experimental.</span>}
+            {useDiracWorkbench && !hfOverlayActive && <span className="text-sky-300">Dirac–Coulomb 4-spinor sampling ({lab.config.diracComponentView} view): P and Q are coupled spinor components of one eigenstate, not separate orbitals.</span>}
+            {lab.config.showIsosurface && !hfOverlayActive && (
               <span className="text-amber-300">
                 3D Marching Tetrahedra isosurface at {(lab.config.isoFraction * 100).toFixed(0)}% max ({lab.config.isoResolution}³ grid)
                 {isoStatus ? ` · ${isoStatus.triangles.toLocaleString()} triangles extracted in ${isoStatus.ms.toFixed(0)} ms` : " · extracting in worker..."}
                 .
               </span>
             )}
-            {state.mode === "atom" && electrons !== null && <span>∫ρ dV = {electrons.toFixed(3)} e (occupancy/tabulated check)</span>}
-            {currentNote && <span className="text-amber-300">j = (ħ/m) Im(ψ*∇ψ) vanishes identically for real stationary orbitals, m = 0, and total-density views; select single-orbital complex basis with m ≠ 0.</span>}
-            {state.showCurrent && !currentNote && <span className="text-emerald-300">green segments: probability-current density j ∝ m|ψ|²/(r sinθ) φ̂ (azimuthal circulation about z)</span>}
+            {state.mode === "atom" && electrons !== null && !hfOverlayActive && <span>∫ρ dV = {electrons.toFixed(3)} e (occupancy/tabulated check)</span>}
+            {currentNote && !hfOverlayActive && <span className="text-amber-300">j = (ħ/m) Im(ψ*∇ψ) vanishes identically for real stationary orbitals, m = 0, and total-density views; select single-orbital complex basis with m ≠ 0.</span>}
+            {state.showCurrent && !currentNote && !hfOverlayActive && <span className="text-emerald-300">green segments: probability-current density j ∝ m|ψ|²/(r sinθ) φ̂ (azimuthal circulation about z)</span>}
           </div>
         </main>
         <aside className={cn("w-[360px] shrink-0 flex-col border-l border-zinc-800 bg-zinc-950 lg:flex", mobilePanel === "analysis" ? "fixed inset-y-20 right-0 z-20 flex w-[92vw] max-w-[360px]" : "hidden")}>
@@ -679,6 +724,31 @@ export default function App() {
         </div>
       )}
 
+      {lab.config.workspace === "hartree-fock" && (
+        <div className="min-h-0 flex-1">
+          <HartreeFockWorkspace
+            initialZ={state.Z}
+            capabilities={lab.hfCapabilities}
+            probing={lab.hfProbing}
+            executions={lab.executions}
+            selectedResult={lab.selectedResult}
+            activeOverlay={lab.config.showHFVolumeInWorkbench ? lab.hfWorkbenchOverlay : null}
+            onRefreshCapabilities={() => {
+              void lab.refreshHFCapabilities();
+            }}
+            onCancelExecution={lab.cancelExecution}
+            onRunHF={lab.runHartreeFockExperiment}
+            onProjectToWorkbench={(overlay) => {
+              lab.setHfWorkbenchOverlay(overlay);
+              lab.patchConfig({ showHFVolumeInWorkbench: true, workspace: "workbench" });
+            }}
+            onClearWorkbenchOverlay={() => {
+              lab.patchConfig({ showHFVolumeInWorkbench: false });
+            }}
+          />
+        </div>
+      )}
+
       {lab.config.workspace === "analysis" && (
         <div className="min-h-0 flex-1">
           <AnalysisWorkspace
@@ -693,6 +763,7 @@ export default function App() {
             providerSelection={providerSelection}
             totalRadialView={totalRadialView}
             electrons={electrons}
+            hfWorkbenchOverlay={lab.hfWorkbenchOverlay}
           />
         </div>
       )}

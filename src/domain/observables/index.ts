@@ -16,7 +16,11 @@ export type ProviderCapability =
   | "expectation-values"
   | "fine-structure"
   | "e1-transitions"
-  | "spectroscopy";
+  | "spectroscopy"
+  | "multi-electron-hf"
+  | "orbital-resolved-hf"
+  | "spin-density"
+  | "scf-diagnostics";
 
 export type ObservableKind = ProviderCapability;
 

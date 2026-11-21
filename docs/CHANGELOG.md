@@ -2,6 +2,13 @@
 
 All notable changes to **ATOMS** are documented in this file. See also [`../CHANGELOG.md`](../CHANGELOG.md).
 
+## [0.7.0] — 2026-11-21 (Multi-Electron Atomic Structure)
+
+- Integrated live **PySCF `2.15.1` + `libcint` + Basis Set Exchange `0.12`** multi-electron Hartree–Fock (`RHF`, `UHF`, `ROHF`, `AtomSphAverageRHF`) via Express 5 localhost API (`/api/hf/capabilities`, `/api/hf/calculate`) and `pyscf-hf-live` (`0.7.0`) provider inside the existing `ExperimentRunner` / Web Worker / IndexedDB platform.
+- Enforced honest scientific boundaries: fixed point-infinite-mass non-relativistic nuclear model only, `RHF` restricted to `2S=0`, pinned BSE `v1` element masks (`K=19`/`Ca=20` Dunning exclusions and `def2` ECP cap `Z<=36`), 110-pt Lebedev radial integration, unconverged SCF failure rejection, and zero offline fabrication.
+- Added `HartreeFockWorkspace` (9th laboratory tab), real 3D GTO volumetric Marching Tetrahedra projection into Workbench, and Analysis 2D slice integration.
+- **Verification**: 17 Vitest suites (**133 tests**), **340** C++17 native checks (Debug + Release), **23** Playwright full-stack browser tests, and 18 live PySCF empirical benchmark profiles (`H..Cr`).
+
 ## [0.6.1] — 2026-11-21 (Scientific Stabilization)
 
 - Fixed `schrodinger-coulomb` `node-counts` validation for all `m_l !== 0` eigenstates (`ok: true` verified across real and complex bases), `nonrelativisticAngularC1` `(-1)^{l_f}` phase sign verified against 2D spherical quadrature, and E1 rate zeroing + exact `sublevelEinsteinA_s1` on spin/magnetic-forbidden transitions.
