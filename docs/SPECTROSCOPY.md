@@ -1,4 +1,4 @@
-# ATOMS v0.6.0 — Dynamic Spectroscopy & NIST Comparison
+# ATOMS v0.6.1 — Dynamic Spectroscopy & NIST Comparison
 
 Modules:
 - [`src/physics/spectroscopy/index.ts`](../src/physics/spectroscopy/index.ts)
@@ -23,7 +23,7 @@ where $\Delta E = E_{\text{upper}} - E_{\text{lower}} > 0$.
   - `"lyman"`: lower shell $n_{\text{lower}} = 1$, upper $2 \le n \le n_{\max}$
   - `"balmer"`: lower shell $n_{\text{lower}} = 2$, upper $3 \le n \le n_{\max}$
   - `"paschen"`: lower shell $n_{\text{lower}} = 3$, upper $4 \le n \le n_{\max}$
-  - `"custom"`: all dipole-allowed pairs $(n_u, n_l)$ up to $n_{\max}$ filtered by optional $[\lambda_{\min}, \lambda_{\max}]\text{ nm}$
+  - `"custom"`: user-selectable lower shell $n_{\text{lower}}$ (`customLowerN`, e.g., $n_{\text{lower}} = 4$ Brackett series) with dipole-allowed upper $n_u \le n_{\max}$ filtered by optional $[\lambda_{\min}, \lambda_{\max}]\text{ nm}$
 - **`wavelengthConvention: "vacuum"`**: All computed and reference wavelengths are **vacuum wavelengths**, NOT standard air ($n_{\text{air}} \approx 1.00027$) wavelengths. (For example, Balmer-α in vacuum is `656.46 nm` vs `656.28 nm` in air.)
 
 ---
@@ -36,7 +36,7 @@ Wavelengths in $\text{nm}$ (vacuum), transition energies in $\text{eV}$, wavenum
 
 ## 4. Assumptions & Zero-Broadening Disclosure
 
-**ATOMS v0.6.0 computes ideal discrete stick spectra strictly from E1 transition matrix elements.**
+**ATOMS v0.6.1 computes ideal discrete stick spectra strictly from E1 transition matrix elements.**
 - No natural Lorentzian radiative linewidths $\Gamma_u + \Gamma_l$, thermal Doppler profiles, Stark/collisional pressure broadening, or instrumental Gaussian slit functions are synthesized.
 - No thermodynamic LTE Boltzmann populations $g_u e^{-E_u/k_B T}$ or collisional-radiative NLTE populations are applied—relativity of stick heights reflects intrinsic $A_{u\to l}$ or $f_{l\to u}$ atomic transition probabilities alone.
 

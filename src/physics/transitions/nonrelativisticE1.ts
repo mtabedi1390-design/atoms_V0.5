@@ -49,10 +49,12 @@ export interface NonRelativisticE1Result {
   readonly transitionEnergy_Ha: number;
   readonly wavelength_nm: number | null;
   readonly frequency_Hz: number | null;
-  /** Absorption oscillator strength f_{lower -> upper} (dimensionless). */
+  /** Absorption subshell oscillator strength f_{lower -> upper} (dimensionless, 0 when forbidden). */
   readonly oscillatorStrength: number;
-  /** Spontaneous emission Einstein A_{upper -> lower} in s^-1 (0 if degenerate/not emitting). */
+  /** Spontaneous emission subshell-summed Einstein A_{upper -> lower} in s^-1 (0 when forbidden or degenerate). */
   readonly einsteinA_s1: number;
+  /** Exact sublevel-to-sublevel spontaneous emission Einstein A_{i -> f} in s^-1 (0 if not emission or forbidden). */
+  readonly sublevelEinsteinA_s1: number;
   readonly numericalQuality: {
     readonly radialMethod: string;
     readonly quadratureIntervals: number;
@@ -88,7 +90,8 @@ export function nonrelativisticAngularC1(lf: number, mf: number, q: SphericalPol
   if (red3j === 0) return 0;
   const m3j = wigner3j(lf, 1, li, -mf, q, mi);
   if (m3j === 0) return 0;
-  const sign = (lf - mf) % 2 === 0 ? 1 : -1;
+  // <l_f || C^(1) || l_i> = (-1)^{l_f} sqrt((2l_f+1)(2l_i+1)) 3j(l_f,1,l_i;0,0,0), combined with Wigner-Eckart (-1)^{l_f - m_f} -> (-1)^{m_f}
+  const sign = Math.abs(mf) % 2 === 0 ? 1 : -1;
   return sign * Math.sqrt((2 * lf + 1) * (2 * li + 1)) * red3j * m3j;
 }
 
@@ -230,17 +233,16 @@ export function calculateNonRelativisticE1Transition(
   const sumAngSq = angSq[-1] + angSq[0] + angSq[1];
   const totalDipoleSq = selectionRule.allowed ? integral_a0 * integral_a0 * sumAngSq : 0;
 
-  // Subshell-averaged reduced dipole strength |<nl||r C^(1)||n'l'>|^2 = max(l_i, l_f) * R_if^2
+  // Subshell-averaged reduced dipole strength |<nl||r C^(1)||n'l'>|^2 = max(l_i, l_f) * R_if^2 (0 when selection rule forbids transition)
   const maxL = Math.max(initial.l, final.l);
-  const reducedDipoleSq = selectionRule.parityChanged ? maxL * integral_a0 * integral_a0 : 0;
+  const reducedDipoleSq = selectionRule.allowed ? maxL * integral_a0 * integral_a0 : 0;
 
   // Absorption oscillator strength f_{lower -> upper} = (2/3) * deltaE_Ha * (<r^2>_subshell / g_lower)
-  // Equivalently for magnetic-sublevel summed transition or subshell:
-  // Sum over m_f of |<f|r|i>|^2 = (maxL / (2*l_lower + 1)) * R^2
+  // Equivalently for subshell: Sum over m_f of |<f|r|i>|^2 = (maxL / (2*l_lower + 1)) * R^2
   const lowerL = E_i <= E_f ? initial.l : final.l;
   const upperL = E_i <= E_f ? final.l : initial.l;
   const fOsc =
-    selectionRule.parityChanged && deltaE_Ha > 0
+    selectionRule.allowed && deltaE_Ha > 0
       ? (2 / 3) * deltaE_Ha * (maxL / (2 * lowerL + 1)) * integral_a0 * integral_a0
       : 0;
 
@@ -248,12 +250,16 @@ export function calculateNonRelativisticE1Transition(
   const alpha = EXTENDED_CONSTANTS.alpha;
   const tau0 = EXTENDED_CONSTANTS.au_time_s;
   const einsteinA =
-    selectionRule.parityChanged && deltaE_Ha > 0
+    selectionRule.allowed && deltaE_Ha > 0
       ? ((4 * alpha * alpha * alpha) / (3 * tau0)) *
         Math.pow(deltaE_Ha, 3) *
         (maxL / (2 * upperL + 1)) *
         integral_a0 *
         integral_a0
+      : 0;
+  const sublevelEinsteinA =
+    isEmission && selectionRule.allowed && deltaE_Ha > 0
+      ? ((4 * alpha * alpha * alpha) / (3 * tau0)) * Math.pow(deltaE_Ha, 3) * totalDipoleSq
       : 0;
 
   return {
@@ -281,6 +287,7 @@ export function calculateNonRelativisticE1Transition(
     frequency_Hz: deltaE_eV > 0 ? energyEvToFrequencyHz(deltaE_eV) : null,
     oscillatorStrength: fOsc,
     einsteinA_s1: einsteinA,
+    sublevelEinsteinA_s1: sublevelEinsteinA,
     numericalQuality: {
       radialMethod: "composite-simpson-3/8-to-1/3",
       quadratureIntervals,

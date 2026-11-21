@@ -42,7 +42,7 @@ import type {
 } from "../contracts";
 
 export const SCHRODINGER_PROVIDER_ID = "schrodinger-coulomb" as const;
-export const SCHRODINGER_PROVIDER_VERSION = "0.6.0" as const;
+export const SCHRODINGER_PROVIDER_VERSION = "0.6.1" as const;
 
 export interface SchrodingerEnergySummary {
   readonly bindingEnergy_eV: number;
@@ -439,8 +439,12 @@ export const schrodingerCoulombV6Provider: PhysicsProvider<
       },
       {
         name: "node-counts",
-        passed: radNodes.length === expRadCount && angThetas.length === expAngCount - (st.basis === "real" ? Math.abs(st.m_l) : 0) + (st.basis === "real" ? Math.abs(st.m_l) : 0) && samplePdf3D >= 0,
-        detail: `radial nodes=${radNodes.length} (expected ${expRadCount}), polar cones=${angThetas.length}, total l=${expAngCount}`,
+        passed:
+          radNodes.length === expRadCount &&
+          angThetas.length === expAngCount - Math.abs(st.m_l) &&
+          angThetas.length + Math.abs(st.m_l) === expAngCount &&
+          samplePdf3D >= 0,
+        detail: `radial nodes=${radNodes.length} (expected ${expRadCount}), polar cones=${angThetas.length} (expected ${expAngCount - Math.abs(st.m_l)}), ${st.basis === "real" ? `azimuthal planes=${Math.abs(st.m_l)}` : `phase order |m_l|=${Math.abs(st.m_l)}`}, total l=${expAngCount}`,
       },
     ];
 

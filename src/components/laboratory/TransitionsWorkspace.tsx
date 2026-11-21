@@ -231,8 +231,9 @@ export function TransitionsWorkspace({ system, onRunTransitionExperiment }: Prop
               <Row label="Total |<f|d|i>|²">{nrResult.totalDipoleSquared_e2a02.toExponential(6)} (e·a₀)²</Row>
               <Row label="Transition energy ΔE">{nrResult.transitionEnergy_eV.toFixed(6)} eV</Row>
               <Row label="Vacuum wavelength λ">{nrResult.wavelength_nm ? `${nrResult.wavelength_nm.toFixed(5)} nm` : "0 (degenerate)"}</Row>
-              <Row label="Oscillator strength f">{nrResult.oscillatorStrength.toFixed(6)}</Row>
+              <Row label="Oscillator strength f (subshell)">{nrResult.oscillatorStrength.toFixed(6)}</Row>
               <Row label="Einstein A (spontaneous)">{nrResult.einsteinA_s1.toExponential(5)} s⁻¹</Row>
+              <Row label="Sublevel A (i → f)">{nrResult.isEmission ? `${nrResult.sublevelEinsteinA_s1.toExponential(5)} s⁻¹` : "0 (absorption)"}</Row>
               <Row label="Quadrature convergence">{nrResult.numericalQuality.convergenceResidual.toExponential(2)}</Row>
             </div>
           ) : diracResult ? (
@@ -251,8 +252,9 @@ export function TransitionsWorkspace({ system, onRunTransitionExperiment }: Prop
               <Row label="Total |<f|d|i>|²">{diracResult.totalDipoleSquared_e2a02.toExponential(6)} (e·a₀)²</Row>
               <Row label="Transition energy ΔE">{diracResult.transitionEnergy_eV.toFixed(6)} eV</Row>
               <Row label="Vacuum wavelength λ">{diracResult.wavelength_nm ? `${diracResult.wavelength_nm.toFixed(6)} nm` : "0 (degenerate)"}</Row>
-              <Row label="Oscillator strength f">{diracResult.oscillatorStrength.toFixed(6)}</Row>
+              <Row label="Oscillator strength f (level)">{diracResult.oscillatorStrength.toFixed(6)}</Row>
               <Row label="Einstein A (spontaneous)">{diracResult.einsteinA_s1.toExponential(5)} s⁻¹</Row>
+              <Row label="Sublevel A (i → f)">{diracResult.isEmission ? `${diracResult.sublevelEinsteinA_s1.toExponential(5)} s⁻¹` : "0 (absorption)"}</Row>
               <Row label="Quadrature residual">{diracResult.numericalQuality.convergenceResidual.toExponential(2)}</Row>
             </div>
           ) : null}

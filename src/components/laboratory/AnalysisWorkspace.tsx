@@ -62,9 +62,10 @@ export function AnalysisWorkspace({
     system.nuclearModel.kind === "point-infinite-mass" || system.nuclearModel.kind === "point-finite-mass";
 
   const activeState = config.theoryMode === "dirac" && isOneElectron && pointNucleus ? diracState : nrState;
+  const aScale = isOneElectron ? 1 / system.reducedMassRatio : 1;
   const extentBohr = useMemo(
-    () => radialExtent(nrState.n, nrState.l, isOneElectron ? system.Z : zeff),
-    [nrState.n, nrState.l, isOneElectron, system.Z, zeff],
+    () => radialExtent(nrState.n, nrState.l, isOneElectron ? system.Z : zeff, isOneElectron ? aScale : 1),
+    [nrState.n, nrState.l, isOneElectron, system.Z, zeff, aScale],
   );
 
   const sliceData = useMemo(() => {
@@ -87,12 +88,11 @@ export function AnalysisWorkspace({
     );
   }, [activeState, system.Z, system.reducedMassRatio, isOneElectron, zeff, sliceQuantity, plane, offsetBohr, extentBohr]);
 
-  const diracView: DiracRadialView | null = useMemo(() => {
+  const diracAnalysis = useMemo(() => {
     if (config.theoryMode !== "dirac" || !isOneElectron || !pointNucleus) return null;
     if (!checkDiracCoulombDomain(system.Z, diracState.kappa).valid) return null;
     const ex = integrateDiracExpectationValues(diracState.n, diracState.kappa, system.Z, system.reducedMassRatio, undefined, 1600);
     const l = lFromKappa(diracState.kappa);
-    const aScale = 1 / system.reducedMassRatio;
     const rMax = Math.max(((3 * diracState.n * diracState.n - l * (l + 1)) * aScale) / (2 * system.Z) * 5, (10 * diracState.n * aScale) / system.Z);
     const rBohr: number[] = [];
     const P_nkappa: number[] = [];
@@ -106,7 +106,7 @@ export function AnalysisWorkspace({
       Q_nkappa.push(pq.Q);
       radialProbability.push(pq.P * pq.P + pq.Q * pq.Q);
     }
-    return {
+    const diracView: DiracRadialView = {
       label: `${diracState.n}${SUBSHELL_LETTERS[l] ?? `l${l}`}_${Math.round(2 * diracState.j)}/2`,
       rBohr,
       P_nkappa,
@@ -116,9 +116,9 @@ export function AnalysisWorkspace({
       smallFraction: ex.smallComponentNorm,
       meanR_a0: ex.meanR_a0,
     };
-  }, [config.theoryMode, isOneElectron, pointNucleus, system.Z, system.reducedMassRatio, diracState]);
-
-  const aScale = isOneElectron ? 1 / system.reducedMassRatio : 1;
+    return { diracView, ex };
+  }, [config.theoryMode, isOneElectron, pointNucleus, system.Z, system.reducedMassRatio, diracState, aScale]);
+  const diracView = diracAnalysis?.diracView ?? null;
 
   return (
     <div className="grid h-full grid-cols-1 gap-3 overflow-y-auto bg-zinc-950 p-4 lg:grid-cols-3">
@@ -168,24 +168,36 @@ export function AnalysisWorkspace({
             n={nrState.n}
             l={nrState.l}
             zeff={isOneElectron ? system.Z : zeff}
+            bohrScale={isOneElectron && !totalRadialView ? aScale : 1}
             model={model}
             totalDensity={totalRadialView}
             diracView={diracView}
           />
-          {isOneElectron && pointNucleus && (
+          {isOneElectron && pointNucleus && diracAnalysis ? (
             <div className="mt-3 flex flex-col gap-1 border-t border-zinc-800 pt-2 text-xs">
-              <Row label="Analytic <r>">{meanRadiusAnalytic(nrState.n, nrState.l, system.Z, aScale).toFixed(6)} a₀</Row>
-              <Row label="Analytic <r²>">{meanRSquaredAnalytic(nrState.n, nrState.l, system.Z, aScale).toFixed(6)} a₀²</Row>
-              <Row label="Analytic <r⁻¹>">{meanInvRAnalytic(nrState.n, system.Z, aScale).toFixed(6)} a₀⁻¹</Row>
-              <Row label="Analytic <r⁻²>">{meanInvRSquaredAnalytic(nrState.n, nrState.l, system.Z, aScale).toFixed(6)} a₀⁻²</Row>
-              <Row label="Analytic <r⁻³>">
+              <Row label="Dirac <r> (log Simpson)">{diracAnalysis.ex.meanR_a0.toFixed(6)} a₀</Row>
+              <Row label="Dirac RMS radius">{diracAnalysis.ex.rmsRadius_a0.toFixed(6)} a₀</Row>
+              <Row label="Dirac <r⁻¹> (numeric)">{diracAnalysis.ex.meanInvR_a0inv.toFixed(6)} a₀⁻¹</Row>
+              <Row label="Dirac <r⁻¹> (analytic)">{diracAnalysis.ex.analyticMeanInvR_a0inv.toFixed(6)} a₀⁻¹</Row>
+              <Row label="Dirac <r⁻²>">{diracAnalysis.ex.meanInvR2_a0inv2.toFixed(6)} a₀⁻²</Row>
+              <Row label="Rel. <r⁻¹> / norm error">
+                {diracAnalysis.ex.invRError.toExponential(2)} / {diracAnalysis.ex.normError.toExponential(2)}
+              </Row>
+            </div>
+          ) : isOneElectron && pointNucleus ? (
+            <div className="mt-3 flex flex-col gap-1 border-t border-zinc-800 pt-2 text-xs">
+              <Row label="Analytic <r> (NR)">{meanRadiusAnalytic(nrState.n, nrState.l, system.Z, aScale).toFixed(6)} a₀</Row>
+              <Row label="Analytic <r²> (NR)">{meanRSquaredAnalytic(nrState.n, nrState.l, system.Z, aScale).toFixed(6)} a₀²</Row>
+              <Row label="Analytic <r⁻¹> (NR)">{meanInvRAnalytic(nrState.n, system.Z, aScale).toFixed(6)} a₀⁻¹</Row>
+              <Row label="Analytic <r⁻²> (NR)">{meanInvRSquaredAnalytic(nrState.n, nrState.l, system.Z, aScale).toFixed(6)} a₀⁻²</Row>
+              <Row label="Analytic <r⁻³> (NR)">
                 {(() => {
                   const v = meanInvRCubedAnalytic(nrState.n, nrState.l, system.Z, aScale);
                   return v === null ? "divergent (l = 0)" : `${v.toFixed(6)} a₀⁻³`;
                 })()}
               </Row>
             </div>
-          )}
+          ) : null}
         </Panel>
       </div>
 

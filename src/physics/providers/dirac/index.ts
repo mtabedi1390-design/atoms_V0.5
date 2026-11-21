@@ -49,7 +49,7 @@ import type {
 } from "../contracts";
 
 export const DIRAC_PROVIDER_ID = "dirac-coulomb" as const;
-export const DIRAC_PROVIDER_VERSION = "0.6.0" as const;
+export const DIRAC_PROVIDER_VERSION = "0.6.1" as const;
 
 export interface DiracEnergyMetrics {
   readonly gamma: number;

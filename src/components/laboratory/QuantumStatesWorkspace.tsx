@@ -303,6 +303,7 @@ export function QuantumStatesWorkspace({
               n={nrState.n}
               l={nrState.l}
               zeff={isOneElectron ? system.Z : 1}
+              bohrScale={isOneElectron ? 1 / system.reducedMassRatio : 1}
               model="hydrogenic-exact"
             />
           )}

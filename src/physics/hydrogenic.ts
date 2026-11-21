@@ -149,23 +149,25 @@ export function radialExtent(n: number, l: number, Z = 1, a = 1): number {
   return Math.max(mean + 7 * sd, (6 * n * a) / Z);
 }
 
-/** Locate radial nodes (zeros of L_{n-l-1}^{2l+1}) by sign scanning + bisection, in Bohr. */
+/** Locate radial nodes (zeros of L_{n-l-1}^{2l+1}) by non-uniform quadratic-grid sign scanning + bisection, in Bohr. */
 export function radialNodes(n: number, l: number, Z = 1, a = 1): number[] {
   const k = n - l - 1;
   if (k === 0) return [];
   const rMax = radialExtent(n, l, Z, a);
-  const N = 4000;
+  const N = 6000;
   const nodes: number[] = [];
   const f = (r: number) => laguerre(k, 2 * l + 1, (2 * Z * r) / (n * a));
-  let prev = f(1e-9);
+  let prevR = 1e-12;
+  let prev = f(prevR);
   for (let i = 1; i <= N && nodes.length < k; i++) {
-    const r = (i / N) * rMax;
+    const t = i / N;
+    const r = rMax * t * t;
     const cur = f(r);
     if (prev * cur < 0) {
-      let lo = ((i - 1) / N) * rMax;
+      let lo = prevR;
       let hi = r;
       let flo = prev;
-      for (let it = 0; it < 60; it++) {
+      for (let it = 0; it < 64; it++) {
         const mid = 0.5 * (lo + hi);
         const fm = f(mid);
         if (flo * fm <= 0) hi = mid;
@@ -176,6 +178,7 @@ export function radialNodes(n: number, l: number, Z = 1, a = 1): number[] {
       }
       nodes.push(0.5 * (lo + hi));
     }
+    prevR = r;
     prev = cur;
   }
   return nodes;
@@ -235,13 +238,21 @@ export const bohrToPm = (r: number): number => r * BOHR_PM;
 /**
  * Integrated radial probability mass ∫_0^R P_r dr by composite Simpson.
  */
-export function integrateRadialMass(n: number, l: number, Z = 1, rMax = radialExtent(n, l, Z), intervals = 4000): number {
-  const h = rMax / intervals;
+export function integrateRadialMass(
+  n: number,
+  l: number,
+  Z = 1,
+  rMax?: number,
+  intervals = 4000,
+  a = 1,
+): number {
+  const rUpper = rMax ?? radialExtent(n, l, Z, a);
+  const h = rUpper / intervals;
   let s = 0;
   for (let i = 0; i <= intervals; i++) {
     const r = i * h;
     const w = i === 0 || i === intervals ? 1 : i % 2 === 1 ? 4 : 2;
-    s += w * radialPDF(n, l, r, Z);
+    s += w * radialPDF(n, l, r, Z, a);
   }
   return (s * h) / 3;
 }
@@ -258,12 +269,19 @@ export interface RadialDomain {
  * geometrically and throws a diagnostic if the tolerance cannot be met; callers
  * must never silently renormalise a truncated distribution.
  */
-export function radialDomainForMass(n: number, l: number, Z = 1, tol = 1e-8, maxExpansions = 24): RadialDomain {
+export function radialDomainForMass(
+  n: number,
+  l: number,
+  Z = 1,
+  tol = 1e-8,
+  maxExpansions = 24,
+  a = 1,
+): RadialDomain {
   validateQN({ n, l, m: 0 });
   if (!(tol > 0 && tol < 0.5)) throw new RangeError(`radialDomainForMass: tol must be in (0, 0.5), got ${tol}`);
-  let rMax = radialExtent(n, l, Z);
+  let rMax = radialExtent(n, l, Z, a);
   for (let k = 0; k <= maxExpansions; k++) {
-    const includedMass = integrateRadialMass(n, l, Z, rMax);
+    const includedMass = integrateRadialMass(n, l, Z, rMax, 4000, a);
     if (includedMass >= 1 - tol) return { rMax, includedMass, tailMass: Math.max(0, 1 - includedMass), expansions: k };
     rMax *= 1.5;
   }

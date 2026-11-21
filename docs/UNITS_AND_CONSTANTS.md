@@ -1,4 +1,4 @@
-# ATOMS v0.6.0 — Physical Constants & Unit System
+# ATOMS v0.6.1 — Physical Constants & Unit System
 
 Modules:
 - [`src/physics/constants.ts`](../src/physics/constants.ts)
@@ -13,11 +13,12 @@ Every experiment definition (`ExperimentDefinition`), calculation result (`Calcu
 
 | Symbol | Quantity | Value | Unit | Notes |
 |---|---|---|---|---|
-| $a_0$ | Bohr radius | `5.29177210903e-11` | `m` (`52.9177210903 pm`) | CODATA 2018 |
-| $E_h$ | Hartree energy | `27.211386245988` | `eV` | $2 R_\infty h c$ |
-| $\alpha$ | Fine-structure constant | `7.2973525693e-3` | dimensionless | $1/\alpha \approx 137.035999084$ |
+| $a_0$ | Bohr radius | `5.29177210903e-11` | `m` (`52.9177210903 pm`) | CODATA 2018 (rel. std. unc. `1.5e-10`) |
+| $E_h$ | Hartree energy | `27.211386245988` | `eV` | $2 R_\infty h c$ (rel. std. unc. `1.9e-12`) |
+| $\alpha$ | Fine-structure constant | `7.2973525693e-3` | dimensionless | $1/\alpha \approx 137.035999084$ (rel. std. unc. `1.5e-10`) |
 | $c$ | Speed of light | `299792458` | `m/s` | Exact SI (2019 redefinition) |
 | $h$ | Planck constant | `6.62607015e-34` | `J·s` | Exact SI (2019 redefinition) |
+| $\hbar$ | Reduced Planck constant | `1.054571817e-34` | `J·s` | 10-digit CODATA 2018 literal; exact SI $h/(2\pi) \approx 1.054571817646\times 10^{-34}$ |
 | $e$ | Elementary charge | `1.602176634e-19` | `C` | Exact SI (2019 redefinition) |
 | $m_e$ | Electron mass | `5.48579909065e-4` | `u` | `9.1093837015e-31 kg` |
 | $m_e c^2$ | Electron rest energy | `510998.95000` | `eV` | $\approx 1/\alpha^2\; E_h$ |
@@ -26,6 +27,8 @@ Every experiment definition (`ExperimentDefinition`), calculation result (`Calcu
 | $m_\alpha$ | Bare alpha particle mass | `4.001506179127` | `u` | Used for $^4\text{He}$ reduced mass |
 | $u$ | Unified atomic mass unit | `1.66053906660e-27` | `kg` | $m({}^{12}\text{C})/12$ |
 | $hc$ | Photon energy-wavelength product | `1239.8419843320028` | `eV·nm` | Exact from $h c / e$ |
+
+Published relative standard uncertainties are exposed programmatically in `CODATA_2018_UNCERTAINTIES` (`src/physics/units.ts`).
 
 ---
 
@@ -55,6 +58,6 @@ Every experiment definition (`ExperimentDefinition`), calculation result (`Calcu
 
 `src/domain/observables/index.ts` separates four orthogonal uncertainty types on results:
 1. `numericalError` — discretization, quadrature step residual, Monte Carlo sampling variance
-2. `physicalUncertainty` — real physical/experimental measurement uncertainty (e.g., NIST IE standard error)
+2. `physicalUncertainty` — real physical/experimental measurement uncertainty (e.g., NIST IE standard error, `CODATA_2018_UNCERTAINTIES`)
 3. `modelApproximation` — omitted physics (e.g., omitted Lamb shift, omitted electron correlation)
 4. `referenceUncertainty` — external dataset tolerance or basis-set truncation gap

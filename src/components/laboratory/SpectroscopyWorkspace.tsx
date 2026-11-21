@@ -33,6 +33,7 @@ export function SpectroscopyWorkspace({
     return compareNonRelativisticAndDiracSpectra(system, {
       mode: config.spectroscopyMode,
       series: config.spectroscopySeries,
+      ...(config.spectroscopySeries === "custom" ? { customLowerN: config.spectroscopyCustomLowerN } : {}),
       maxUpperN: config.spectroscopyMaxUpperN,
       minWavelength_nm: config.spectroscopyMinNm,
       maxWavelength_nm: config.spectroscopyMaxNm,
@@ -43,6 +44,7 @@ export function SpectroscopyWorkspace({
     system,
     config.spectroscopyMode,
     config.spectroscopySeries,
+    config.spectroscopyCustomLowerN,
     config.spectroscopyMaxUpperN,
     config.spectroscopyMinNm,
     config.spectroscopyMaxNm,
@@ -93,15 +95,36 @@ export function SpectroscopyWorkspace({
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${config.spectroscopySeries === "custom" ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+              {config.spectroscopySeries === "custom" && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] text-zinc-500">Lower n</span>
+                  <input
+                    aria-label="Custom lower n"
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={config.spectroscopyCustomLowerN}
+                    onChange={(e) => {
+                      const lowerN = Math.max(1, Math.min(6, Number(e.target.value) || 1));
+                      onPatchConfig({
+                        spectroscopyCustomLowerN: lowerN,
+                        spectroscopyMaxUpperN: Math.max(config.spectroscopyMaxUpperN, Math.min(8, lowerN + 1)),
+                      });
+                    }}
+                    className="h-7 rounded-sm border border-zinc-700 bg-zinc-900 px-2 font-mono text-zinc-100"
+                  />
+                </label>
+              )}
               <label className="flex flex-col gap-1">
                 <span className="text-[10px] text-zinc-500">Max upper n</span>
                 <input
+                  aria-label="Max upper n"
                   type="number"
-                  min={2}
-                  max={7}
+                  min={config.spectroscopySeries === "custom" ? Math.min(8, config.spectroscopyCustomLowerN + 1) : 2}
+                  max={8}
                   value={config.spectroscopyMaxUpperN}
-                  onChange={(e) => onPatchConfig({ spectroscopyMaxUpperN: Math.max(2, Math.min(7, Number(e.target.value) || 5)) })}
+                  onChange={(e) => onPatchConfig({ spectroscopyMaxUpperN: Math.max(2, Math.min(8, Number(e.target.value) || 5)) })}
                   className="h-7 rounded-sm border border-zinc-700 bg-zinc-900 px-2 font-mono text-zinc-100"
                 />
               </label>

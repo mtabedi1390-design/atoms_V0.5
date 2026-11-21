@@ -47,6 +47,20 @@ export const EXTENDED_CONSTANTS = {
   hc_eV_nm: (6.62607015e-34 * 299792458) / 1.602176634e-19 * 1e9,
 } as const;
 
+/** Published CODATA 2018 relative standard uncertainties (dimensionless). */
+export const CODATA_2018_UNCERTAINTIES = {
+  version: CONSTANTS_VERSION,
+  alpha_rel: 1.5e-10,
+  rydberg_rel: 1.9e-12,
+  a0_rel: 1.5e-10,
+  hartree_eV_rel: 1.9e-12,
+  m_e_u_rel: 2.9e-11,
+  m_p_u_rel: 6.0e-11,
+  m_d_u_rel: 1.5e-11,
+  m_alpha_u_rel: 1.5e-11,
+  au_time_rel: 1.9e-12,
+} as const;
+
 export type LengthUnit = "a0" | "m" | "angstrom" | "nm" | "pm" | "fm";
 export type EnergyUnit = "Ha" | "eV" | "J" | "cm-1";
 export type TimeUnit = "s" | "au_t";

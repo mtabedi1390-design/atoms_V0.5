@@ -1,8 +1,8 @@
-# ATOMS v0.6.0 — General Atomic Quantum Laboratory
+# ATOMS v0.6.1 — General Atomic Quantum Laboratory (Scientific Stabilization)
 
-**ATOMS (`v0.6.0`)** is a browser-local computational atomic-physics laboratory combining analytical nonrelativistic Schrödinger–Coulomb and relativistic 4-component Dirac–Coulomb solvers, ab initio E1 transition rates and vacuum spectroscopy, off-thread Web-Worker experiment orchestration with IndexedDB persistence, 3D Marching Tetrahedra isosurfaces and WebGL2 point clouds, and audited `v0.5` 118-element relativistic Dirac–Fock & PySCF HF density datasets.
+**ATOMS (`v0.6.1`)** is a stabilized, scientifically verified browser-local computational atomic-physics laboratory combining analytical nonrelativistic Schrödinger–Coulomb and relativistic 4-component Dirac–Coulomb solvers, ab initio E1 transition rates and vacuum spectroscopy, off-thread Web-Worker experiment orchestration with IndexedDB persistence, 3D Marching Tetrahedra isosurfaces and WebGL2 point clouds, and audited `v0.5` 118-element relativistic Dirac–Fock & PySCF HF density datasets.
 
-> **Workspace & Repository Note:** This workspace contains the imported working copy of `mtabedi1390-design/atoms` without `.git` metadata or push credentials. All code, data snapshots, builds, unit/parity suites, benchmarks, and Playwright browser tests ran cleanly inside this container; Git commands for creating and pushing `development/v0.6.0` are documented in [`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md).
+> **Git & Branching Note:** `v0.5.0` (`47b84f8`, branch `release/v0.5.0`) and `v0.6.0` (`e26d46b`, branch `development/v0.6.0`) remain immutable. `v0.6.1` stabilization work is maintained on branch `development/v0.6.1` (tagged `v0.6.1`) with documented Git release steps in [`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md).
 
 ---
 
@@ -26,9 +26,9 @@ npm run data:build      # SHA-256 verification + NIST/Lobato JSON generation
 npm run data:matrix     # Regenerate docs/ACCURACY_MATRIX.md (118 elements)
 npm run typecheck       # tsc --noEmit -p tsconfig.json (0 errors)
 npm run test:native     # C++17 Debug + Release core tests (340 checks each)
-npm test                # Vitest suite (15 files, 112 tests, incl. C++ parity)
+npm test                # Vitest suite (16 files, 126 tests, incl. C++ parity & stabilization)
 npm run build           # Vite production bundle + inline Web Workers
-npm run test:browser    # Playwright WebGL2 + Laboratory tests (20 tests)
+npm run test:browser    # Playwright WebGL2 + Laboratory tests (21 tests)
 npm run bench           # CPU compute + SwiftShader WebGL2 benchmarks -> docs/BENCHMARK.md
 ```
 

@@ -550,7 +550,7 @@ export default function App() {
           )}
           <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1 text-[10px] text-zinc-400">
             <ScaleBar extentPm={extentPm} />
-            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.6.0</span>
+            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.6.1</span>
             {effectiveRender.colorMode === "phase-real" && <span><span className="text-orange-400">■ ψ &gt; 0</span> <span className="text-blue-400">■ ψ &lt; 0</span> — sign of the real wavefunction (not density)</span>}
             {effectiveRender.colorMode === "phase-complex" && <span>hue = arg ψ ∈ (−π, π] — complex phase e<sup>imφ</sup>; brightness ∝ log|ψ|²</span>}
             {effectiveRender.colorMode === "density" && <span>colour/brightness ∝ log-relative density (black→violet→red→yellow→white)</span>}

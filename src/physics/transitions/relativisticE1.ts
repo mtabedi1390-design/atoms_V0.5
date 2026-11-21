@@ -57,6 +57,8 @@ export interface RelativisticE1Result {
   readonly frequency_Hz: number | null;
   readonly oscillatorStrength: number;
   readonly einsteinA_s1: number;
+  /** Exact sublevel-to-sublevel spontaneous emission Einstein A_{i -> f} in s^-1 (0 if not emission or forbidden). */
+  readonly sublevelEinsteinA_s1: number;
   readonly numericalQuality: {
     readonly radialMethod: string;
     readonly quadratureIntervals: number;
@@ -266,17 +268,21 @@ export function calculateRelativisticE1Transition(
     initial.j,
   );
   const reducedAmplitude = redLarge * rPP_a0 + redSmall * rQQ_a0;
-  const lineStrengthS = selectionRule.parityChanged && Math.abs(selectionRule.deltaJ) <= 1 ? reducedAmplitude * reducedAmplitude : 0;
+  const lineStrengthS = selectionRule.allowed ? reducedAmplitude * reducedAmplitude : 0;
 
   const lowerJ = eI.bindingEnergy_eV <= eF.bindingEnergy_eV ? initial.j : final.j;
   const upperJ = eI.bindingEnergy_eV <= eF.bindingEnergy_eV ? final.j : initial.j;
   const gLower = Math.round(2 * lowerJ + 1);
   const gUpper = Math.round(2 * upperJ + 1);
 
-  const fOsc = deltaE_Ha > 0 && lineStrengthS > 0 ? (2 / (3 * gLower)) * deltaE_Ha * lineStrengthS : 0;
+  const fOsc = selectionRule.allowed && deltaE_Ha > 0 && lineStrengthS > 0 ? (2 / (3 * gLower)) * deltaE_Ha * lineStrengthS : 0;
   const einsteinA =
-    deltaE_Ha > 0 && lineStrengthS > 0
+    selectionRule.allowed && deltaE_Ha > 0 && lineStrengthS > 0
       ? ((4 * alpha * alpha * alpha) / (3 * gUpper * EXTENDED_CONSTANTS.au_time_s)) * Math.pow(deltaE_Ha, 3) * lineStrengthS
+      : 0;
+  const sublevelEinsteinA =
+    isEmission && selectionRule.allowed && deltaE_Ha > 0
+      ? ((4 * alpha * alpha * alpha) / (3 * EXTENDED_CONSTANTS.au_time_s)) * Math.pow(deltaE_Ha, 3) * sumMagSq
       : 0;
 
   return {
@@ -303,6 +309,7 @@ export function calculateRelativisticE1Transition(
     frequency_Hz: deltaE_eV > 0 ? energyEvToFrequencyHz(deltaE_eV) : null,
     oscillatorStrength: fOsc,
     einsteinA_s1: einsteinA,
+    sublevelEinsteinA_s1: sublevelEinsteinA,
     numericalQuality: {
       radialMethod: "log-grid-simpson-dirac-spinor",
       quadratureIntervals: intervals,

@@ -82,6 +82,7 @@ export interface LaboratoryConfig {
   readonly isoWireframe: boolean;
   readonly spectroscopySeries: SpectralSeriesKind;
   readonly spectroscopyMode: SpectrumMode;
+  readonly spectroscopyCustomLowerN: number;
   readonly spectroscopyMaxUpperN: number;
   readonly spectroscopyCompareModels: boolean;
   readonly spectroscopyMinNm: number | undefined;
@@ -130,6 +131,7 @@ export function useAtomsLaboratory(
     isoWireframe: false,
     spectroscopySeries: "balmer",
     spectroscopyMode: "emission",
+    spectroscopyCustomLowerN: 4,
     spectroscopyMaxUpperN: 6,
     spectroscopyCompareModels: true,
     spectroscopyMinNm: undefined,
@@ -300,7 +302,7 @@ export function useAtomsLaboratory(
       system: atomicSystem,
       quantumStates: [activeQuantumState],
       providerId,
-      providerVersion: "0.6.0",
+      providerVersion: "0.6.1",
       observables: isDirac
         ? ["bound-energy", "total-energy", "spinor-wavefunction", "expectation-values", "fine-structure"]
         : ["bound-energy", "total-energy", "radial-wavefunction", "expectation-values"],
@@ -323,7 +325,7 @@ export function useAtomsLaboratory(
         quantumStates: [],
         transition: { initial, final },
         providerId,
-        providerVersion: "0.6.0",
+        providerVersion: "0.6.1",
         observables: ["e1-transitions"],
         numericalParameters: { quadratureIntervals: 4000 },
       });
@@ -340,11 +342,12 @@ export function useAtomsLaboratory(
         system: atomicSystem,
         quantumStates: [],
         providerId: model,
-        providerVersion: "0.6.0",
+        providerVersion: "0.6.1",
         observables: ["spectroscopy", "e1-transitions"],
         modelParameters: {
           series: config.spectroscopySeries,
           mode: config.spectroscopyMode,
+          ...(config.spectroscopySeries === "custom" ? { customLowerN: config.spectroscopyCustomLowerN } : {}),
           maxUpperN: config.spectroscopyMaxUpperN,
           ...(config.spectroscopyMinNm !== undefined ? { minWavelength_nm: config.spectroscopyMinNm } : {}),
           ...(config.spectroscopyMaxNm !== undefined ? { maxWavelength_nm: config.spectroscopyMaxNm } : {}),

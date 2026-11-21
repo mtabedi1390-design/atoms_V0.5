@@ -198,3 +198,38 @@ test("v0.6 workspace navigation has no mobile horizontal overflow", async ({ pag
   }
   expect(errors).toEqual([]);
 });
+
+test("v0.6.1 stabilization checks: custom spectroscopy lower-n, Dirac Analysis observables, and m_l != 0 execution", async ({
+  page,
+}) => {
+  await bootLab(page);
+
+  // 1. Custom spectroscopy Lower n control computes Brackett lines (4 -> 5 ~ 4052 nm)
+  await page.getByTestId("ws-spectroscopy").click();
+  await page.getByRole("button", { name: "Custom" }).click();
+  const lowerInput = page.getByLabel("Custom lower n");
+  await expect(lowerInput).toBeVisible();
+  await lowerInput.fill("4");
+  await expect(page.getByText(/405\d\./).first()).toBeVisible();
+
+  // 2. Quantum States m_l = +1 (2p) Worker experiment passes validation checks (ok=true)
+  await page.getByTestId("ws-quantum-states").click();
+  await page.getByRole("button", { name: "2", exact: true }).first().click();
+  await page.getByRole("button", { name: "p (1)" }).click();
+  await page.getByRole("button", { name: "+1", exact: true }).click();
+  await page.getByRole("button", { name: "Execute in Worker Platform" }).click();
+  await expect(page.getByTestId("saved-experiment-card").first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText("completed").first()).toBeVisible();
+  await expect(page.getByText(/node-counts/)).toBeVisible();
+  await expect(page.getByText("✗")).toHaveCount(0);
+
+  // 3. Switch to Dirac mode and inspect Analysis expectation values (must display Dirac, not NR)
+  await page.getByTestId("ws-quantum-states").click();
+  await page.getByRole("button", { name: /Relativistic Dirac \(n, κ, j, m_j\)/ }).click();
+  await page.getByTestId("ws-analysis").click();
+  await expect(page.getByText("Dirac <r> (log Simpson)")).toBeVisible();
+  await expect(page.getByText("Dirac <r⁻¹> (analytic)")).toBeVisible();
+
+  expect(errors).toEqual([]);
+});
+

@@ -27,6 +27,7 @@ interface Props {
   n: number;
   l: number;
   zeff: number;
+  bohrScale?: number;
   model: ModelId;
   totalDensity?: TotalRadialDensityView | null;
   diracView?: DiracRadialView | null;
@@ -38,7 +39,7 @@ interface Props {
  * - Full-atom total-density mode (Dirac-Fock or PySCF HF): P_total(r) = 4*pi*r^2*rho(r) (pm^-1, integral = Z).
  * - Dirac spinor mode: coupled large P_nkappa(r), small Q_nkappa(r), and total |P|^2+|Q|^2.
  */
-export function RadialPlot({ mode, n, l, zeff, model, totalDensity, diracView }: Props) {
+export function RadialPlot({ mode, n, l, zeff, bohrScale = 1, model, totalDensity, diracView }: Props) {
   const W = 320, H = 150, padL = 36, padB = 22, padT = 8, padR = 8;
 
   const diracData = useMemo(() => {
@@ -100,20 +101,20 @@ export function RadialPlot({ mode, n, l, zeff, model, totalDensity, diracView }:
   }, [mode, totalDensity]);
 
   const orbData = useMemo(() => {
-    const rMax = radialExtent(n, l, zeff) * 0.85;
+    const rMax = radialExtent(n, l, zeff, bohrScale) * 0.85;
     const N = 240;
     const pts: [number, number][] = [];
     let max = 0;
     for (let i = 0; i <= N; i++) {
       const r = (i / N) * rMax;
-      const p = radialPDF(n, l, r, zeff) / BOHR_PM; // per pm
+      const p = radialPDF(n, l, r, zeff, bohrScale) / BOHR_PM; // per pm
       pts.push([r * BOHR_PM, p]);
       if (p > max) max = p;
     }
-    const nodes = radialNodes(n, l, zeff).map((r) => r * BOHR_PM);
-    const mom = radialMoments(n, l, zeff, 1, 4000);
-    return { pts, max, rMaxPm: rMax * BOHR_PM, nodes, meanNum: mom.meanR * BOHR_PM, norm: mom.norm, meanAn: meanRadiusAnalytic(n, l, zeff) * BOHR_PM };
-  }, [n, l, zeff]);
+    const nodes = radialNodes(n, l, zeff, bohrScale).map((r) => r * BOHR_PM);
+    const mom = radialMoments(n, l, zeff, bohrScale, 4000);
+    return { pts, max, rMaxPm: rMax * BOHR_PM, nodes, meanNum: mom.meanR * BOHR_PM, norm: mom.norm, meanAn: meanRadiusAnalytic(n, l, zeff, bohrScale) * BOHR_PM };
+  }, [n, l, zeff, bohrScale]);
 
   const active = totalData ?? orbData;
   const sx = (x: number) => padL + (x / active.rMaxPm) * (W - padL - padR);

@@ -2,6 +2,12 @@
 
 All notable changes to **ATOMS** are documented in this file. See also [`../CHANGELOG.md`](../CHANGELOG.md).
 
+## [0.6.1] — 2026-11-21 (Scientific Stabilization)
+
+- Fixed `schrodinger-coulomb` `node-counts` validation for all `m_l !== 0` eigenstates (`ok: true` verified across real and complex bases), `nonrelativisticAngularC1` `(-1)^{l_f}` phase sign verified against 2D spherical quadrature, and E1 rate zeroing + exact `sublevelEinsteinA_s1` on spin/magnetic-forbidden transitions.
+- Upgraded `radialNodes` to non-uniform quadratic grid scan (`n = 1..12`), added reduced-mass `a` scaling across `integrateRadialMass`, `radialDomainForMass`, and `RadialPlot`, wired Dirac spinor expectation values into `AnalysisWorkspace`, added `Custom` series `Lower n` UI control in `SpectroscopyWorkspace`, and exposed `CODATA_2018_UNCERTAINTIES`.
+- **Verification**: 16 Vitest suites (**126 tests**), **340** C++17 native checks (Debug + Release), **21** Playwright browser tests, and isolated clean-directory extraction verification of `ATOMS_v0.6.1_Scientific_Stabilization.zip`.
+
 ## [0.6.0] — 2026-11-21
 
 - Evolves ATOMS v0.5.0 into **ATOMS v0.6.0 — General Atomic Quantum Laboratory**.

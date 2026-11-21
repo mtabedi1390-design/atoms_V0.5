@@ -1,4 +1,4 @@
-# ATOMS v0.6.0 — Relativistic Point-Coulomb Dirac Engine
+# ATOMS v0.6.1 — Relativistic Point-Coulomb Dirac Engine
 
 Module: [`src/physics/providers/dirac/index.ts`](../src/physics/providers/dirac/index.ts)
 
@@ -26,7 +26,7 @@ Module: [`src/physics/providers/dirac/index.ts`](../src/physics/providers/dirac/
 
 ## 2. Definitions
 
-- `diracCoulombV6Provider`: `PhysicsProvider` (`id: "dirac-coulomb"`, `version: "0.6.0"`).
+- `diracCoulombV6Provider`: `PhysicsProvider` (`id: "dirac-coulomb"`, `version: "0.6.1"`).
 - `checkDiracCoulombDomain(Z, kappa)`: enforces real radical $\kappa^2 - (Z\alpha)^2 > 0$.
 - `computeDiracEnergy(n, kappa, Z, reducedMassRatio)`: returns `bindingEnergy_Ha`, `bindingEnergy_eV`, `totalEnergy_Ha`, `totalEnergy_eV`, `restEnergy_eV`, `gamma`, `apparentN`, and `nonRelativisticLimit_eV`.
 - `diracRadialPQ(n, kappa, rBohr, Z, reducedMassRatio)`: returns `{ P, Q, density }`.
@@ -87,3 +87,4 @@ Radial distance `rBohr` is in $a_0$; total probability density $|\Psi|^2$ has un
   2. Checks combined spinor norm $\int_0^\infty (|P|^2 + |Q|^2)\,dr = 1$ within $< 10^{-7}$ across $1s_{1/2}, 2p_{1/2}, 2p_{3/2}, 3d_{5/2}$ up to $\text{Au}^{78+}$ ($Z=79$) and $\text{Og}^{117+}$ ($Z=118$).
   3. Demonstrates nonrelativistic $\alpha \to 0$ convergence (small component $Q \propto Z\alpha \to 0$, $E_{n\kappa}^{\text{bind}} \to E_n^{\text{Schrödinger}}$).
   4. Enforces $(Z\alpha)^2 < \kappa^2$ domain check (rejects $Z = 138$ for $\kappa = -1$).
+- `src/physics/__tests__/stabilization.test.ts`: additionally verifies exact $(n, j)$ degeneracy across $Z \in \{1, 29, 79\}$, near-origin power-law cusp slope $P,Q \propto r^\gamma$ at $Z=79$, 2D spherical spin-angular normalization/orthogonality across $\kappa \in [-3..+2]$, and monotonic grid refinement convergence.

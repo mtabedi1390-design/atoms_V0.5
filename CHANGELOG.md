@@ -2,6 +2,22 @@
 
 All notable changes to **ATOMS** are documented in this file.
 
+## [0.6.1] — 2026-11-21 (Scientific Stabilization)
+
+### Fixed
+- **Schrödinger Provider `m_l !== 0` Validation (`src/physics/providers/schrodinger/index.ts`)**: Fixed the `node-counts` validation expression where `- (st.basis === "real" ? Math.abs(st.m_l) : 0) + (st.basis === "real" ? Math.abs(st.m_l) : 0)` cancelled to `0`, causing every non-zero `m_l` calculation (`2p m=±1`, `3d m=±1,±2`, etc.) to report `ok: false`. Now verifies polar cone count (`l - |m_l|`) plus `|m_l|` equals `l` across both `real` and `complex` bases.
+- **Nonrelativistic E1 Angular Phase Sign (`src/physics/transitions/nonrelativisticE1.ts`)**: Included the `(-1)^{l_f}` phase of the reduced matrix element $\langle l_f \| C^{(1)} \| l_i \rangle$ in `nonrelativisticAngularC1` (net Wigner–Eckart phase `(-1)^{m_f}` rather than `(-1)^{l_f - m_f}`), verified directly against independent 2D spherical harmonic quadrature.
+- **Forbidden Sublevel E1 Rate Consistency (`src/physics/transitions/nonrelativisticE1.ts`, `relativisticE1.ts`, `TransitionsWorkspace.tsx`)**: Zeroed `oscillatorStrength`, `einsteinA_s1`, `reducedDipoleSquared_e2a02` / `reducedLineStrength_S`, and newly added exact `sublevelEinsteinA_s1` whenever `selectionRule.allowed === false` (e.g., spin-flip or `|Δm_l| > 1` / `|Δm_j| > 1`), eliminating contradictions where `E1 FORBIDDEN` appeared beside non-zero multiplet rates.
+- **High-`n` Radial Node Scanning & Finite-Mass Scaling (`src/physics/hydrogenic.ts`, `RadialPlot.tsx`, `QuantumStatesWorkspace.tsx`, `AnalysisWorkspace.tsx`)**: Upgraded `radialNodes` to a non-uniform quadratic coordinate grid (`r_i = rMax * (i/N)^2`, `N = 6000`) preventing missed inner origin-adjacent zeros up to `n = 12`; added optional trailing reduced-mass `a = 1` parameter to `integrateRadialMass` and `radialDomainForMass`; wired `bohrScale = 1 / reducedMassRatio` into `RadialPlot` and `AnalysisWorkspace`.
+- **Analysis Dirac Expectation Values & Custom Spectroscopy Lower-`n` UI (`AnalysisWorkspace.tsx`, `SpectroscopyWorkspace.tsx`, `useAtomsLaboratory.ts`)**: Displayed Dirac spinor expectation values (`<r>`, RMS radius, numeric & analytic `<r^-1>`, `<r^-2>`, `normError`, `invRError`) when in Dirac mode; added the missing `Lower n` control (`spectroscopyCustomLowerN`) for `custom` series spectroscopy; aligned `constants.ts` `hbar_Js` comment and exposed `CODATA_2018_UNCERTAINTIES` in `units.ts`.
+
+### Verification & Release Engineering
+- Added `src/physics/__tests__/stabilization.test.ts` (14 verification tests: `m_l !== 0`, `n=1..12` radial nodes, grid refinement convergence, Dirac `(n,j)` degeneracy & `r^gamma` cusp slope, 2D spin-angular & E1 spherical quadrature checks, closed-form Gordon $1s\text{–}2p / 2s\text{–}3p / 2p\text{–}3d$ benchmarks, sublevel Einstein $A$ sum rule, forbidden transition zeroing, custom spectroscopy, CODATA-2018 self-consistency, 2D/3D symmetries, and Worker/IndexedDB/JSON safety).
+- Expanded Playwright verification in `tests/browser/laboratory.spec.ts` to **21 tests** (`Custom` Brackett spectroscopy, `m_l = +1` Worker validation `completed`, Dirac `Analysis` expectation values).
+- Preserved `v0.5.0` (`47b84f8`) and `v0.6.0` (`e26d46b`) immutably; developed `v0.6.1` on `development/v0.6.1` tagged `v0.6.1`, and packaged clean reproducible archive `ATOMS_v0.6.1_Scientific_Stabilization.zip` verified via isolated fresh-directory extraction.
+
+---
+
 ## [0.6.0] — 2026-11-21
 
 ### Added

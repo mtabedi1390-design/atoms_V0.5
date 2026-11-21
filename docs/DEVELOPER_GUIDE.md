@@ -1,4 +1,4 @@
-# ATOMS v0.6.0 — Developer Guide
+# ATOMS v0.6.1 — Developer Guide
 
 ---
 
@@ -20,25 +20,25 @@ npm run data:matrix     # Regenerate docs/ACCURACY_MATRIX.md
 npm run typecheck       # Strict TypeScript compiler check (tsc --noEmit)
 npm run lint            # TypeScript syntax/type validation
 npm run test:native     # Compile Debug & Release C++17 native core (340 checks each)
-npm test                # Run full Vitest suite (15 files, 112 tests, incl. C++ parity)
+npm test                # Run full Vitest suite (16 files, 126 tests, incl. C++ parity)
 npm run build           # Production Vite singlefile + inline Worker build (dist/index.html)
-npm run test:browser    # Run Playwright WebGL2 & Laboratory end-to-end tests (20 tests)
+npm run test:browser    # Run Playwright WebGL2 & Laboratory end-to-end tests (21 tests)
 npm run bench           # CPU microbenchmarks + Chromium SwiftShader benchmark -> docs/BENCHMARK.md
 ```
 
 ---
 
-## 3. Repository & Git Release Workflow (`development/v0.6.0`)
+## 3. Repository & Git Release Workflow (`development/v0.6.1`)
 
-Version control preserves `v0.5.0` immutably while developing `v0.6.0` on its own branch:
+Version control preserves prior releases immutably while developing `v0.6.1` on its own branch:
 
 - **`v0.5.0` (`release/v0.5.0`, commit `47b84f8`)**: Immutable `v0.5.0` baseline (annotated tag `v0.5.0`).
-- **`main`**: Tracks `origin/main` cleanly without history rewrites.
-- **`development/v0.6.0`**: Dedicated development branch for `ATOMS v0.6.0` and release tag `v0.6.0`.
+- **`v0.6.0` (`development/v0.6.0`, commit `e26d46b`)**: Immutable `v0.6.0` baseline (annotated tag `v0.6.0`).
+- **`development/v0.6.1`**: Dedicated stabilization branch for `ATOMS v0.6.1` and release tag `v0.6.1`.
 
 ```bash
-npm run build && npm run release:pack   # Verify production build and write releases/v0.6.0/ artifacts + SHA256SUMS.txt
-git push origin development/v0.6.0 v0.6.0 v0.5.0 release/v0.5.0
+npm run build && npm run release:pack   # Verify production build and write releases/v0.6.1/ artifacts + SHA256SUMS.txt
+git push origin development/v0.6.1 v0.6.1 development/v0.6.0 v0.6.0 v0.5.0 release/v0.5.0
 ```
 
 ---

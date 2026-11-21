@@ -1,4 +1,4 @@
-# ATOMS v0.6.0 — Analytical Schrödinger–Coulomb Engine
+# ATOMS v0.6.1 — Analytical Schrödinger–Coulomb Engine
 
 Module: [`src/physics/providers/schrodinger/index.ts`](../src/physics/providers/schrodinger/index.ts) (built atop [`src/physics/hydrogenic.ts`](../src/physics/hydrogenic.ts) and [`native/quantum_core.hpp`](../native/quantum_core.hpp)).
 
@@ -20,7 +20,7 @@ Module: [`src/physics/providers/schrodinger/index.ts`](../src/physics/providers/
 
 ## 2. Definitions
 
-- `schrodingerCoulombV6Provider`: `PhysicsProvider` (`id: "schrodinger-coulomb"`, `version: "0.6.0"`, capabilities: `bound-energy`, `total-energy`, `radial-wavefunction`, `spatial-density`, `radial-probability`, `expectation-values`, `e1-transitions`, `spectroscopy`).
+- `schrodingerCoulombV6Provider`: `PhysicsProvider` (`id: "schrodinger-coulomb"`, `version: "0.6.1"`, capabilities: `bound-energy`, `total-energy`, `radial-wavefunction`, `spatial-density`, `radial-probability`, `expectation-values`, `e1-transitions`, `spectroscopy`).
 - `evaluateSchrodingerState(state, Z, reducedMassRatio, rBohr, theta, phi)`: returns complex amplitude `{ re, im, radialR, density }`.
 - Radial probability distribution: $P_{nl}(r) = r^2 |R_{nl}(r)|^2$ normalized to $\int_0^\infty P_{nl}(r)\,dr = 1$.
 
@@ -44,7 +44,8 @@ Module: [`src/physics/providers/schrodinger/index.ts`](../src/physics/providers/
 ## 5. Numerical Method
 
 - Generalized Laguerre polynomials $L_{n-l-1}^{2l+1}(\rho)$ evaluated via stable three-term recurrence; factorial ratios computed in log-$\Gamma$ space (`lgamma`) in double precision to avoid overflow up to high $(n, l)$.
-- Radial nodes ($n - l - 1$ distinct zeros of $L_{n-l-1}^{2l+1}(\rho)$) bracketed on dense radial grids and refined via bisection to $< 10^{-11}\,a_0$.
+- Radial nodes ($n - l - 1$ distinct zeros of $L_{n-l-1}^{2l+1}(\rho)$) bracketed on a non-uniform quadratic-coordinate grid ($r_i = r_{\max}(i/N)^2$, $N = 6000$) and refined via 64-step bisection to $< 10^{-11}\,a_0$, preventing skipped inner zeros at high $n$.
+- `node-counts` provider check explicitly validates polar cones ($l - |m_l|$) and azimuthal nodes / winding order ($|m_l|$) across all $m_l \in [-l..+l]$ in both real and complex bases.
 - Identical mathematical recurrence in `native/quantum_core.hpp` allows deterministic cross-language verification.
 
 ---

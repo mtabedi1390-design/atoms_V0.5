@@ -17,7 +17,7 @@ export interface ConstantsDataset {
   readonly rydberg_eV: number;
   /** Hartree energy in eV. */
   readonly hartree_eV: number;
-  /** Reduced Planck constant in J·s (exact by SI definition). */
+  /** Reduced Planck constant h/(2π) in J·s (10-digit CODATA 2018 value; exact SI h/(2π) ≈ 1.054571817646e-34). */
   readonly hbar_Js: number;
   /** Electron mass in kg. */
   readonly m_e_kg: number;

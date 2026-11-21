@@ -1,30 +1,33 @@
-# ATOMS v0.6.0 — Release Notes
+# ATOMS v0.6.1 — Release Notes (Scientific Stabilization)
 
 **Release Date:** 2026-11-21  
 **Project:** ATOMS — General Atomic Quantum Laboratory  
-**Target Branch:** `development/v0.6.0` (from `v0.5.0`)
+**Branch / Tag:** `development/v0.6.1` / `v0.6.1` (from immutable `v0.6.0` `e26d46b` and `v0.5.0` `47b84f8`)
 
 ---
 
-## Highlights
+## Stabilization Highlights
 
-1. **Dual Analytical Quantum Solvers (Schrödinger + Dirac 4-Spinor)**:
-   Evaluate bound eigenstates for Hydrogen and arbitrary one-electron hydrogen-like ions ($N = 1$, $Z = 1..118$ Schrödinger; $1 \le Z \le 137$ Dirac) with exact bare-nuclear reduced-mass scaling, Sommerfeld–Dirac fine structure, spinor $P/Q$ radial components, $\langle r^k \rangle$ expectation values, and strict $(Z\alpha)^2 < \kappa^2$ domain enforcement.
-2. **Ab Initio Electric-Dipole (E1) Transitions & Vacuum Spectroscopy**:
-   Compute NR and Relativistic E1 selection rules, polarization channels, oscillator strengths, and Einstein $A$ spontaneous emission rates from radial + Wigner 3-$j$/6-$j$ angular matrix elements. Synthesize discrete vacuum emission/absorption spectra (`Lyman`, `Balmer`, `Paschen`, `Custom`) verified to `< 0.05 nm` against NIST $^1\text{H}$ vacuum centroids.
-3. **Browser-Local Reproducible Experiment Platform**:
-   Run calculations off-thread in Web Workers with structured-clone validation, cancellation, monotonic stale-result protection, IndexedDB history (`atoms_laboratory_db`), clear distinction between cached result replay (`loaded-from-store`) and fresh recalculation (`computed`), and schema-validated JSON import/export (`atoms-experiment-bundle`).
-4. **3D Marching Tetrahedra Isosurfaces & 2D Slices**:
-   Visualize exact signed wavefunction lobes, orbital probability densities, and Dirac 4-spinor large/small/total densities on 3D triangle meshes and 2D XY/XZ/YZ heatmaps inside the 8-workspace ATOMS Laboratory UI.
-5. **100% `v0.5.0` Preservation**:
-   All 118-element Lobato 2026 Dirac–Fock total densities, PySCF `aug-cc-pVTZ` datasets, Slater qualitative subshell visualizations, SHA-256 NIST snapshots, C++17 native reference parity checks, and all 13 `v0.5` Playwright tests remain intact and passing.
+1. **Nonrelativistic Schrödinger & E1 Defect Repairs**:
+   - Fixed `node-counts` validation check so all non-zero magnetic sublevels (`m_l !== 0`, real and complex bases) return `ok: true` with exact polar-cone (`l - |m_l|`) and azimuthal counts.
+   - Corrected the missing `(-1)^{l_f}` phase factor in `nonrelativisticAngularC1` so signed Gaunt integrals match $(-1)^{m_f}\sqrt{(2l_f+1)(2l_i+1)}\binom{l_f\,1\,l_i}{0\,0\,0}\binom{l_f\,1\,l_i}{-m_f\,q\,m_i}$ verified by independent 2D spherical quadrature.
+   - Zeroed multiplet `oscillatorStrength`, `einsteinA_s1`, reduced dipole strength, and newly added `sublevelEinsteinA_s1` whenever E1 selection rules forbid a magnetic or spin-flip transition, and proved $\sum_{m_f} A_{i\to f} = A_{\text{level}}$ across both NR and Dirac engines.
+2. **Numerical Robustness & UI Scientific Consistency**:
+   - Upgraded `radialNodes` to non-uniform quadratic-coordinate scanning (`N = 6000`) resolving inner radial zeros cleanly up to `n = 12`.
+   - Added reduced-mass Bohr scale `bohrScale = 1 / reducedMassRatio` to `integrateRadialMass`, `radialDomainForMass`, `RadialPlot`, `QuantumStatesWorkspace`, and `AnalysisWorkspace`.
+   - Fixed `AnalysisWorkspace` to display Dirac spinor expectation values (`<r>`, RMS, `<r^-1>`, `<r^-2>`, `normError`, `invRError`) when Dirac mode is active instead of NR Schrödinger values.
+   - Wired the `Custom` series `Lower n` input control in `SpectroscopyWorkspace` and `useAtomsLaboratory.ts`.
+   - Exposed `CODATA_2018_UNCERTAINTIES` in `src/physics/units.ts` and corrected the `hbar_Js` precision comment in `src/physics/constants.ts`.
+3. **Layered Scientific Verification**:
+   - **16 Vitest files / 126 tests** (including closed-form Gordon `1s-2p / 2s-3p / 2p-3d`, 2D spin-angular integrals, Dirac $r^\gamma$ cusp log-slope, grid refinement convergence, Worker/IndexedDB/JSON safety).
+   - **340 C++17 native checks** (Debug + Release) and **1,020 native parity vectors**.
+   - **21 Playwright browser tests** (`core`, `responsive`, `science`, `laboratory`).
 
 ---
 
 ## Known Limitations & Explicit Out-of-Scope Boundaries
 
-- **One-Electron Analytical Scope**: Exact Schrödinger/Dirac solvers cover strictly $N = 1$ systems and point-Coulomb nuclei. General multi-electron ions ($1 < N < Z$) and anions ($N > Z$) are representable in `AtomicSystem` and intentionally flagged `unsupported` rather than approximated with silent surrogates.
-- **No Finite-Nucleus Radial Solver**: `finite-uniform` and `finite-fermi` nuclear models are typed schemas flagged `unsupported solver` in providers until a numerical finite-nucleus radial solver is implemented.
-- **Omitted Higher-Order Effects**: Point-Coulomb Dirac eigenstates omit QED Lamb shifts (vacuum polarization & self-energy), Breit magnetic interactions, hyperfine structure, and M1/E2 radiative channels; generated spectra are ideal zero-broadening discrete lines.
-- **GitHub Remote Push Credentials**: Local Git version control (`v0.5.0` immutable tag + `release/v0.5.0`, `development/v0.6.0`, `v0.6.0` release tag) and verified release artifacts (`releases/v0.6.0/`) are established in the repository; pushing to the remote GitHub repository requires workstation authentication (`git push origin development/v0.6.0 v0.6.0 v0.5.0 release/v0.5.0`).
-
+- **One-Electron Analytical Scope**: Exact Schrödinger/Dirac solvers cover strictly $N = 1$ systems and point-Coulomb nuclei. Multi-electron ions ($1 < N < Z$) and anions ($N > Z$) are representable in `AtomicSystem` and explicitly flagged `unsupported`.
+- **No Finite-Nucleus Radial Solver**: `finite-uniform` and `finite-fermi` nuclear models remain typed schemas flagged `unsupported solver` in providers.
+- **Omitted Higher-Order Effects**: Point-Coulomb Dirac eigenstates omit QED Lamb shifts, Breit interactions, hyperfine structure, and M1/E2 radiative channels; generated spectra are ideal zero-broadening discrete lines.
+- **GitHub Remote Push**: Local Git tags/branches (`v0.5.0` `47b84f8`, `v0.6.0` `e26d46b`, `v0.6.1`) and packaged zip `ATOMS_v0.6.1_Scientific_Stabilization.zip` are verified locally; remote push requires workstation GitHub credentials.
