@@ -15,7 +15,8 @@
     "bench": "node scripts/benchmark.mjs",
     "data:build": "python3 science/build_atomic_data.py",
     "data:matrix": "tsx scripts/generate_accuracy_matrix.ts",
-    "data:hf": "python3 science/hf_export.py"
+    "data:hf": "python3 science/hf_export.py",
+    "release:pack": "node scripts/package_release.mjs"
   },
   "dependencies": {
     "clsx": "2.1.1",

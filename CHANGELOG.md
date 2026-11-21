@@ -26,6 +26,9 @@ All notable changes to **ATOMS** are documented in this file.
 - **Verification & Documentation**:
   - Expanded suites to 15 Vitest files (**112 tests**), **340** C++17 native checks (Debug + Release), and **20** Playwright browser tests (`v0.5` regression + `v0.6` laboratory).
   - Delivered all 15 v0.6 documentation files under `docs/`.
+- **Git Release Engineering & Artifact Packaging**:
+  - Preserved `v0.5.0` immutably via annotated tag `v0.5.0` and branch `release/v0.5.0` (`47b84f8`).
+  - Maintained `v0.6.0` on dedicated development branch `development/v0.6.0` with annotated release tag `v0.6.0` and reproducible release packager `scripts/package_release.mjs` (`npm run release:pack`) producing source archive, standalone web bundle, manifest, and SHA-256 checksums.
 
 ---
 

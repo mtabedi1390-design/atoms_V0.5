@@ -28,16 +28,17 @@ npm run bench           # CPU microbenchmarks + Chromium SwiftShader benchmark -
 
 ---
 
-## 3. Repository & Git Branching Note (`development/v0.6.0`)
+## 3. Repository & Git Release Workflow (`development/v0.6.0`)
 
-Because this workspace container was provisioned from an imported copy without a `.git` metadata directory or GitHub push credentials, all edits reside cleanly in the workspace tree. On a local clone of `mtabedi1390-design/atoms` with Git initialized, finalize the release branch via:
+Version control preserves `v0.5.0` immutably while developing `v0.6.0` on its own branch:
+
+- **`v0.5.0` (`release/v0.5.0`, commit `47b84f8`)**: Immutable `v0.5.0` baseline (annotated tag `v0.5.0`).
+- **`main`**: Tracks `origin/main` cleanly without history rewrites.
+- **`development/v0.6.0`**: Dedicated development branch for `ATOMS v0.6.0` and release tag `v0.6.0`.
 
 ```bash
-git checkout -b development/v0.6.0
-git status
-git add -A
-git commit -m "feat(v0.6.0): General Atomic Quantum Laboratory — domain, Dirac/Schrodinger engines, E1 spectroscopy, Worker experiments, 3D isosurfaces, and docs"
-git push -u origin development/v0.6.0
+npm run build && npm run release:pack   # Verify production build and write releases/v0.6.0/ artifacts + SHA256SUMS.txt
+git push origin development/v0.6.0 v0.6.0 v0.5.0 release/v0.5.0
 ```
 
 ---
