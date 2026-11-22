@@ -1,40 +1,39 @@
-# Verification Record (`ATOMS v0.6.1`)
+# Verification Record (`ATOMS v0.7.0`)
 
-Date: 2026-11-21 · Branch: `development/v0.6.1` (branched from immutable `v0.6.0` `e26d46b`; `v0.5.0` `47b84f8` preserved).
+Date: 2026-11-22 · Baseline: `ATOMS v0.6.1` (`bfc0d6a91b2ca5a88ace754bcf85551e5ffa5690`). Container workspace has no `.git` directory.
 
 ## 1. Commands Executed & Measured Results
 
 | Command | Exit | Result Summary |
 |---|---|---|
-| `npm run data:build` (`python3 science/build_atomic_data.py`) | 0 | Verified SHA-256 of pinned NIST ASD & Lobato 2026 snapshots; generated `108` NIST + `118` Dirac–Fock JSON records (max relative charge error `1.991e-07`) |
-| `npm run data:matrix` (`tsx scripts/generate_accuracy_matrix.ts`) | 0 | Generated 118-row coverage table in `docs/ACCURACY_MATRIX.md` |
 | `npm run typecheck` (`tsc --noEmit -p tsconfig.json`) | 0 | Strict TypeScript clean (`0` errors) |
 | `npm run lint` (`tsc --noEmit -p tsconfig.json`) | 0 | Clean syntax & type validation (`0` errors) |
 | `npm run test:native` (`bash scripts/test_native.sh`) | 0 | Built `build-core-Debug` (`g++ -std=c++17 -O0 -g`) and `build-core-Release` (`g++ -std=c++17 -O2 -DNDEBUG`); both passed **340 checks (`failures=0`)** |
-| `npm test` (`vitest run`) | 0 | **16 test files / 126 tests passed** (including C++↔TS parity on 1,020 vectors and 14 new `v0.6.1` scientific stabilization tests) |
-| `npm run build` (`vite build`) | 0 | Single-file bundle `dist/index.html` (`1,873.69 kB` / `gzip: 502.02 kB`), inline Web Workers & pinned JSON datasets |
-| `npm run test:browser` (`playwright test`) | 0 | **21 Playwright scenarios passed** across Chromium Headless + ANGLE/SwiftShader WebGL2 (`core`: 5, `responsive`: 1, `science`: 7, `laboratory`: 8) |
+| `npm test` (`vitest run`) | 0 | **17 test files / 133 tests passed** (126 `v0.6.1` regression + C++ parity tests + 7 live PySCF/BSE/Experiment tests) |
+| `npm run build` (`vite build`) | 0 | Single-file bundle `dist/index.html` (`~1.98 MB`), inline Web Workers & pinned JSON datasets |
+| `npm run test:browser` (`playwright test`) | 0 | **23 Playwright scenarios passed** via `NODE_ENV=production PORT=4173 node server.ts` (`core`: 5, `responsive`: 1, `science`: 7, `laboratory`: 8, `hartreeFock`: 2) |
 
 ---
 
-## 2. Unit, Stabilization & Integration Coverage (`126` Vitest Tests across `16` Files)
+## 2. Unit, Stabilization, & Live HF Coverage (`133` Vitest Tests across `17` Files)
 
-- `src/physics/__tests__/stabilization.test.ts` (`14` tests): All `m_l != 0` real & complex Schrödinger provider validations, `n=1..12` radial nodes, quadrature refinement convergence, Dirac $(n,j)$ degeneracy & $r^\gamma$ cusp log-slope, 2D spin-angular normalization/orthogonality, closed-form Gordon $1s\text{–}2p / 2s\text{–}3p / 2p\text{–}3d$, independent 2D spherical E1 quadrature, sublevel Einstein-$A$ sum rule, forbidden-rate zeroing, custom Brackett spectroscopy, CODATA-2018 consistency, 2D/3D symmetries, and Worker/IndexedDB/JSON safety.
-- `src/physics/__tests__/hydrogenic.test.ts` (`26` tests), `diracProvider.test.ts` (`7` tests), `schrodingerProvider.test.ts` (`4` tests), `transitionsSpectroscopy.test.ts` (`10` tests), `visualization.test.ts` (`3` tests), `diracFock.test.ts` (`3` tests), `native_parity.test.ts` (`5` tests), `unitsAndRegistry.test.ts` (`4` tests).
-- `src/sampling/__tests__/sampler.test.ts` (`18` tests), `src/data/__tests__/elements.test.ts` (`9` tests), `src/science/__tests__/providers.test.ts` (`11` tests), `src/domain/__tests__/` (`7` tests), `src/experiments/__tests__/` (`5` tests).
+- `src/physics/__tests__/hartreeFock.test.ts` (`7` tests): 1-electron analytical `-Z²/2` convergence & `J+K=0` (`H`, `He+`), closed-shell RHF convergence (`He`, `Be`, `Ne`), open-shell `UHF`/`ROHF`/`AtomSphAverageRHF` (`Li`, `C`, `N`, `F`) including `ROHF` `<Fa>`/`<Fb>` diagnostics, honest rejection of unconverged `maxCycle=1` / invalid spin / finite nucleus / missing basis elements (`K`, `Ca`, `Rb`), and Worker + `ExperimentRunner` + `MemoryExperimentStore` + JSON + 3D/2D grid pipeline.
+- Preserved `16` `v0.6.1` suites (`126` tests): `stabilization.test.ts` (`14`), `hydrogenic.test.ts` (`26`), `sampler.test.ts` (`18`), `providers.test.ts` (`11`), `transitionsSpectroscopy.test.ts` (`10`), `elements.test.ts` (`9`), `diracProvider.test.ts` (`7`), `native_parity.test.ts` (`5`), `schrodingerProvider.test.ts` (`4`), `unitsAndRegistry.test.ts` (`4`), `atomic.test.ts` (`4`), `lifecycle.test.ts` (`4`), `quantum.test.ts` (`3`), `visualization.test.ts` (`3`), `diracFock.test.ts` (`3`), `v0.5Integration.test.ts` (`1`).
 
 ---
 
-## 3. Browser E2E Scenarios Verified (`21 / 21` Passed)
+## 3. Browser E2E Scenarios Verified (`23 / 23` Passed)
 
-- `tests/browser/core.spec.ts` (`5` tests), `tests/browser/responsive.spec.ts` (`1` test), `tests/browser/science.spec.ts` (`7` tests).
-- `tests/browser/laboratory.spec.ts` (`8` tests): 8-workspace navigation & WebGL2 preservation, $\text{He}^+$ nuclear vs neutral mass & unsupported finite-nucleus UI, Dirac 4-spinor + 3D Marching Tetrahedra Worker extraction, E1 allowed/forbidden transitions + Worker history persistence, Balmer/Lyman NIST spectroscopy + Analysis slice, IndexedDB replay vs recompute + JSON bundle validation, mobile layout zero overflow, and `v0.6.1` custom spectroscopy `Lower n`, `m_l=+1` Worker `completed`, and Dirac `Analysis` expectation values.
+- `tests/browser/core.spec.ts` (`5`), `tests/browser/responsive.spec.ts` (`1`), `tests/browser/science.spec.ts` (`7`), `tests/browser/laboratory.spec.ts` (`8`).
+- `tests/browser/hartreeFock.spec.ts` (`2`):
+  1. Live PySCF capabilities probe, `C` (`2S=2`) disabled-RHF enforcement, `UHF/cc-pVDZ` execution inside Web Worker -> Express -> `.venv` Python PySCF, orbital/SCF/Lebedev radial verification, 3D Marching Tetrahedra Workbench overlay projection, Analysis 2D slice integration, and IndexedDB replay distinction (`loaded-from-store`).
+  2. Mocked `503` `/api/hf/capabilities` check confirming honest `backend offline` reporting with zero fabricated results.
 
 ---
 
 ## 4. Known Scientific & Environment Boundaries
 
-1. **Software WebGL2 only in CI**: Headless Chromium uses ANGLE/SwiftShader rather than hardware GPU acceleration.
-2. **One-Electron Analytical Solvers & Finite Nucleus**: Exact Schrödinger/Dirac engines cover $N=1$ point-Coulomb systems; multi-electron ions ($1 < N < Z$), anions ($N > Z$), and finite nuclear charge distributions (`finite-uniform`, `finite-fermi`) report `unsupported`.
-3. **Subshell Orbitals Beyond Hydrogen & QED**: Multi-electron Dirac–Fock (`lobato2026-df`) and PySCF HF (`pyscf-hf`) provide total spherical $\rho(r)$ only; QED Lamb shift, Breit interaction, hyperfine splitting, and M1/E2 channels remain omitted.
-4. **NIST ASD `Z = 109..118`**: Ground terms and 1st ionization energies remain `null` / `unavailable`.
+1. **Software WebGL2 only in CI**: Headless Chromium uses ANGLE/SwiftShader.
+2. **Container Build Tools**: `g++` 12.2.0 is installed; `cmake`, `gfortran`, and `.git` metadata are absent in this container (`compas/sphf` benchmark values use pinned upstream `MIT` outputs rather than local Fortran compilation).
+3. **HF Physical & Basis Boundaries**: Nonrelativistic `point-infinite-mass` fixed nucleus only; `def2-*` capped at `Z <= 36` (ECPs excluded); `K (19)`/`Ca (20)` omitted in standard Dunning sets per BSE v1; electron correlation (`MP2`/`CCSD`) and relativistic multi-electron Dirac–Fock deferred to `v0.7.1`/`v0.8.0`.
+4. **Local Python Runtime**: Multi-electron HF calculations require `.venv` / `/opt/atoms-py` / `ATOMS_PYTHON` (`PySCF 2.15.1` + `BSE 0.12`).

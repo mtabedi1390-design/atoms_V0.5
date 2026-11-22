@@ -9,12 +9,14 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 if command -v uv >/dev/null 2>&1; then
   uv venv "$TARGET_ENV" --python "$PYTHON_BIN"
   uv pip install --python "$TARGET_ENV/bin/python" -r science/requirements.txt
-elif "$PYTHON_BIN" -m venv --help >/dev/null 2>&1; then
-  "$PYTHON_BIN" -m venv "$TARGET_ENV"
+elif "$PYTHON_BIN" -m venv "$TARGET_ENV" 2>/dev/null; then
   "$TARGET_ENV/bin/pip" install --upgrade pip
   "$TARGET_ENV/bin/pip" install -r science/requirements.txt
+elif "$PYTHON_BIN" -m venv --without-pip "$TARGET_ENV" 2>/dev/null && command -v curl >/dev/null 2>&1; then
+  curl -sSL https://bootstrap.pypa.io/get-pip.py | "$TARGET_ENV/bin/python"
+  "$TARGET_ENV/bin/pip" install --no-cache-dir -r science/requirements.txt
 else
-  echo "Neither 'uv' nor 'python3 -m venv' is available on PATH." >&2
+  echo "Neither 'uv', 'python3-venv+ensurepip', nor 'curl' bootstrap is available." >&2
   echo "Install uv (https://docs.astral.sh/uv/) or python3-venv + python3-pip, then re-run." >&2
   exit 1
 fi

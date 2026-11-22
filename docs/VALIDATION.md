@@ -1,6 +1,6 @@
-# ATOMS v0.6.1 — Scientific & Software Validation Report
+# ATOMS v0.7.0 — Scientific & Software Validation Report
 
-All verification commands reported below were executed cleanly against the final `v0.6.1` codebase (no tests were weakened, skipped, or fabricated).
+All verification commands reported below were executed cleanly against the final `v0.7.0` codebase (no tests were weakened, skipped, or fabricated). See also [`MULTI_ELECTRON_VALIDATION.md`](./MULTI_ELECTRON_VALIDATION.md) for the complete PySCF vs `compas/sphf` & Koga–Thakkar 1999 numerical table.
 
 ---
 
@@ -8,18 +8,23 @@ All verification commands reported below were executed cleanly against the final
 
 | Suite / Command | Scope Covered | Result | Verified Outcome |
 |---|---|---|---|
-| `npm run data:build` | SHA-256 verification of `nist_asd_ie.tsv`, `lobato2026_*`, charge integral across `Z=1..118` | **PASS** | 108 NIST + 118 Dirac–Fock JSONs regenerated; max relative charge error `1.991e-07` |
+| `npm run data:build` | SHA-256 verification of `nist_asd_ie.tsv`, `lobato2026_*`, charge integral across `Z=1..118` | **PASS** | 108 NIST + 118 Dirac–Fock JSONs verified |
 | `npm run data:matrix` | 118-element observable coverage audit | **PASS** | 118 rows generated into `docs/ACCURACY_MATRIX.md` |
 | `npm run typecheck` (`npm run lint`) | Strict TypeScript compilation (`tsc --noEmit -p tsconfig.json`) | **PASS** | 0 errors across all modules |
 | `npm run test:native` | C++17 `native/quantum_core.hpp` Debug (`-O0 -g`) & Release (`-O2 -DNDEBUG`) | **PASS** | **340 checks, 0 failures** (both Debug & Release) |
-| `npm test` (Vitest) | Unit, Domain, Schrödinger, Dirac, Transitions, Spectroscopy, Stabilization, Sampling, Visualization, Experiment Platform, C++ Parity | **PASS** | **16 test files, 126/126 tests passed** |
+| `npm test` (Vitest) | Unit, Domain, Schrödinger, Dirac, Transitions, Spectroscopy, Stabilization, **Live PySCF HF**, Sampling, Visualization, Experiment Platform, C++ Parity | **PASS** | **17 test files, 133/133 tests passed** |
 | `npm run build` | Vite production single-file client bundle + inline Web Workers | **PASS** | `dist/index.html` built cleanly (0 errors) |
-| `npm run test:browser` (Playwright) | Chromium + SwiftShader WebGL2 (`tests/browser/core.spec.ts`, `responsive.spec.ts`, `science.spec.ts`, `laboratory.spec.ts`) | **PASS** | Executed across `v0.5` regression (13 tests) + `v0.6 / v0.6.1` Laboratory workflows (8 tests) = **21 tests passing** |
-| Layer isolation audit | Grep `src/domain`, `src/physics`, `src/experiments`, `src/numerics`, `src/sampling` for `react`/`three` | **PASS** | **0 matches** |
+| `npm run test:browser` (Playwright) | Full-stack Express 5 + Python PySCF + Chromium + SwiftShader WebGL2 (`core`, `responsive`, `science`, `laboratory`, `hartreeFock`) | **PASS** | Executed across `v0.5`/`v0.6.1` regression (21 tests) + `v0.7.0` live Hartree–Fock & offline guard (2 tests) = **23 tests passing** |
+| Layer isolation audit | Grep `src/domain`, `src/physics`, `src/experiments`, `src/numerics`, `src/sampling` (excl. `__tests__`) for `react`, `three`, `node:` | **PASS** | **0 matches** |
 
 ---
 
 ## 2. Numerical & Scientific Cross-Checks Verified in Automated Tests
+
+### 2.0 Multi-Electron Hartree–Fock Engine (`hartreeFock.test.ts`, `hartreeFock.spec.ts`)
+- **1-Electron Analytic Limits (`H`, `He+`)**: Monotonic convergence toward $-Z^2/2$ (`H`: `-0.499821 Ha`, `He+`: `-1.994290 Ha`) with strict self-interaction cancellation $|J + K| < 10^{-11}\text{ Ha}$.
+- **Closed-Shell RHF & Open-Shell UHF/ROHF/AtomSphAvg (`He`, `Li`, `Be`, `C`, `N`, `F`, `Ne`)**: Monotonic GTO basis convergence (`STO-3G` -> `cc-pVDZ` -> `cc-pVTZ` -> `aug-cc-pVTZ`) toward `compas/sphf` (`MIT`) and Koga–Thakkar (1999) HF limits; `ROHF` closed-shell eigenvalues and open-shell Koopmans $\langle F^\alpha \rangle$ verified on `Li` (`1s: -2.477798 Ha`, `2s <Fa>: -0.196313 Ha`).
+- **Invariants & Honest Rejection**: Energy decomposition consistency $|E - (T+V+J+K)| < 10^{-9}\text{ Ha}$, $\max|C^T S C - I| < 10^{-8}$, $\operatorname{Tr}(PS) = N$, 110-pt Lebedev radial integrals to $< 10^{-4}\,e$, unconverged `maxCycle=1` SCF rejection, `RHF 2S != 0` / finite-nucleus / missing-element (`K`, `Ca`, `Rb`) rejection, and full Worker/IndexedDB/JSON/3D+2D grid verification.
 
 ### 2.1 Schrödinger–Coulomb Engine (`schrodingerProvider.test.ts`, `stabilization.test.ts`, `hydrogenic.test.ts`, `native_parity.test.ts`)
 - **All Magnetic Sublevels (`m_l !== 0`)**: Verified `ok: true` and exact polar-cone (`l - |m_l|`) / azimuthal node counts across every $m_l \in [-l..+l]$ for $2p, 3d, 4f$ in both real and complex bases.

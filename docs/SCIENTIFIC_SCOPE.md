@@ -1,29 +1,28 @@
-# Scientific Scope — ATOMS v0.6.1
+# Scientific Scope — ATOMS v0.7.0
 
-**ATOMS** is a browser-local computational atomic-physics laboratory focused on isolated atoms and ions (`Z = 1..118`, $N \ge 0$, $q = Z - N$) with exact analytical one-electron quantum solvers and audited multi-electron reference density datasets.
+**ATOMS** is a computational atomic-physics laboratory focused on isolated atoms and ions (`Z = 1..118`, $N \ge 0$, $q = Z - N$) combining exact analytical one-electron quantum solvers, **live non-relativistic multi-electron Hartree–Fock (`PySCF 2.15.1` + `libcint` + `BSE 0.12`)**, and audited 118-element reference density datasets.
 
-## In Scope (`v0.6.1`)
+## In Scope (`v0.7.0`)
 
-1. **Exact Nonrelativistic One-Electron Hydrogenic Solvers (`schrodinger-coulomb`)**:
-   - Point-nucleus Coulomb Hamiltonian with both `point-infinite-mass` and isotope bare-nuclear `point-finite-mass` reduced-mass scaling ($\psi_{nlm}(r,\theta,\phi) = R_{nl}(r) Y_l^m(\theta,\phi)$ in complex and real tesseral bases).
-   - Valid physically **only** for $N = 1$ systems ($^1\text{H}$, $^2\text{H}$, $\text{He}^+$, $\text{Li}^{2+}$, ..., $1 \le Z \le 118$).
-   - Radial and angular nodes, analytic $E_n$, analytic and numeric $\langle r^k \rangle$ ($k = -3..-1, 1, 2$), coherent superpositions, and azimuthal probability current $\mathbf{j}$.
-2. **Exact Relativistic 4-Component Dirac–Coulomb Solvers (`dirac-coulomb`)**:
-   - Point-Coulomb Sommerfeld–Dirac energy levels ($E_{\text{bind}} = E_{\text{total}} - m_e c^2$), coupled large $P_{n\kappa}(r)$ and small $Q_{n\kappa}(r)$ bispinor components, spin-angular $\Omega_{\kappa m_j}(\theta,\phi)$, Hellmann–Feynman $\langle r^{-1}\rangle$ verification, and strict $(Z\alpha)^2 < \kappa^2$ domain gating.
-3. **Ab Initio Electric-Dipole (E1) Transitions & Discrete Vacuum Spectroscopy ($N = 1$)**:
-   - Nonrelativistic Schrödinger and 4-component Dirac length-gauge E1 selection rules, polarization channels $q \in \{-1, 0, +1\}$, oscillator strengths $f_{if}$, multiplet and sublevel Einstein $A$ spontaneous emission rates, and discrete vacuum spectral series (`Lyman`, `Balmer`, `Paschen`, `Custom`) with NIST $^1\text{H}$ vacuum comparison (explicitly zero-broadening).
-4. **All-Electron Relativistic Total Spherical Electron Densities (`Z = 1..118`, `v0.5.0` preserved)**:
-   - Lobato et al. (2026) adaptive Dirac–Padé parameterization of B-spline Dirac–Fock (`atomx`, finite nucleus, spherical occupation average for open shells; exact Dirac 1s for `Z = 1`), reproducing $\int_0^\infty 4\pi r^2\rho(r)\,dr = Z$ within `< 2e-7` across all 118 elements.
-   - Explicitly labelled as **total spherically averaged electron density only** (no subshell $R_{nl}(r)$ decomposition or phase).
-5. **Non-Relativistic Hartree–Fock Total Densities & Energies (`Z ∈ {1, 2, 6, 7, 8, 10}`) & Qualitative Slater Subshells**:
-   - Bundled PySCF `aug-cc-pVTZ` RHF/ROHF exports (`src/data/hf/*.json`) and independent-electron Slater-screened orbitals (`Model B`).
+1. **Live Nonrelativistic Multi-Electron Hartree–Fock (`pyscf-hf-live`, `v0.7.0`)**:
+   - Fixed clamped point-infinite-mass non-relativistic $N$-electron Hamiltonian ($\sum_i (-\frac{1}{2}\nabla_i^2 - Z/r_i) + \sum_{i<j} r_{ij}^{-1}$).
+   - Independent formalisms: `RHF` (strictly `2S=0`), `UHF` (spin-resolved $\alpha/\beta$, $\rho_s$, $\langle S^2 \rangle$), `ROHF` (Roothaan effective Fock + explicit Koopmans $\langle F^\alpha \rangle, \langle F^\beta \rangle$), and `AtomSphAverageRHF` (spherical fractional configuration average).
+   - Explicit neutral/ionic configurations (`Curated NIST Ground`, `Aufbau + Hund`, `User Custom`), verified all-electron `BSE v1` basis coverage (`STO-3G` `1..54`, `6-31G`/`def2-SVP`/`def2-TZVP` `1..36`, `cc-pVDZ`/`cc-pVTZ` `1..36 \ {19}`, `aug-cc-pVTZ` `1..36 \ {19,20}`), `110`-point Lebedev radial total/spin integration, and genuine 3D GTO spatial orbital/density grids (`mo-signed`, `mo-density`, `total-density`, `spin-density`).
+2. **Exact Nonrelativistic One-Electron Hydrogenic Solvers (`schrodinger-coulomb`)**:
+   - Point-nucleus Coulomb Hamiltonian with `point-infinite-mass` and isotope bare-nuclear `point-finite-mass` reduced-mass scaling ($N = 1$, $1 \le Z \le 118$), nodes, analytic $\langle r^k \rangle$, superpositions, and probability current $\mathbf{j}$.
+3. **Exact Relativistic 4-Component Dirac–Coulomb Solvers (`dirac-coulomb`)**:
+   - Point-Coulomb Sommerfeld–Dirac eigenvalues, coupled $(P_{n\kappa}, Q_{n\kappa}) \Omega_{\kappa m_j}$ spinors, and $(Z\alpha)^2 < \kappa^2$ domain gating ($N = 1$).
+4. **Ab Initio Electric-Dipole (E1) Transitions & Discrete Vacuum Spectroscopy ($N = 1$)**:
+   - NR and Dirac length-gauge E1 selection rules, polarization channels, oscillator strengths, Einstein $A$, and discrete vacuum series compared against NIST $^1\text{H}$ (zero broadening).
+5. **All-Electron Relativistic Total Spherical Electron Densities (`Z = 1..118`) & Bundled Snapshots**:
+   - Lobato et al. (2026) Dirac–Padé total spherical density parameterization (`< 2e-7` norm error) and `v0.5` `aug-cc-pVTZ` total density exports, alongside qualitative Slater subshells (`Model B`).
 6. **Pinned Atomic Reference Metadata (`Z = 1..118`)**:
-   - Ground configurations, ground terms/$J$, and 1st ionization energies from NIST ASD (`Z = 1..108`, with `Z = 104..108` marked `predicted` and `Z = 109..118` marked `unavailable`), CIAAW 2021 atomic weights, and Cordero 2008 covalent radii (`Z ≤ 96`).
+   - NIST ASD (`Z = 1..108`, `Z = 109..118` `unavailable`), CIAAW 2021 atomic weights, Cordero 2008 covalent radii (`Z ≤ 96`), and pinned HF limits (`compas/sphf`, Koga–Thakkar 1999).
 
-## Explicitly Out of Scope (Not Implemented)
+## Explicitly Out of Scope (Not Implemented in `v0.7.0`)
 
 ATOMS does **not** implement or fabricate:
-- Finite-nucleus numerical radial solvers (`finite-uniform` and `finite-fermi` remain explicitly `unsupported solver`).
-- In-browser multi-electron SCF/HF/DFT/MCDHF/CI/CC solvers or multi-electron optical spectra (`1 < N < Z`, $N > Z$ anions flagged `unsupported` in `N = 1` solvers; `GRASP2018` / `Datatoms` registered as unavailable).
-- Higher-order QED radiative corrections (Lamb shift, Breit interaction), hyperfine splitting, M1/E2/two-photon transitions, line-shape broadening (natural/Doppler/collisional), or NLTE population modeling.
-- External fields (Zeeman/Stark), molecular orbitals, solid-state band structures, or multi-user backend databases.
+- Electron correlation methods (`MP2`, `CCSD`, `CISD`, `MCHF` — planned `v0.7.1`) or Effective Core Potentials (`def2-*` for `Z >= 37` is excluded rather than miscalculated without ECPs).
+- Multi-electron relativistic Dirac–Fock / MCDHF / RCI (`v0.8.0`/`v0.8.1`; `GRASP2018` and `Datatoms` remain registered `unavailable`).
+- Finite-nucleus numerical radial solvers (`finite-uniform` and `finite-fermi` remain `unsupported solver`).
+- Multi-electron optical spectra (`A_fi` transitions cover $N = 1$ only), higher-order QED Lamb shift, Breit interaction, hyperfine splitting, Stark/Zeeman external fields, or collisional-radiative plasma modeling.
