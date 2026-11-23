@@ -37,6 +37,9 @@ import { SamplerClient } from "@/sampling/client";
 import type { SamplingParams } from "@/sampling/sampler";
 import { VisualizationWorkerClient } from "@/workers/visualizationClient";
 import { activeSubshell, initialState, reducer } from "@/state/appState";
+import { EXPERIMENT_BUNDLE_FORMAT, EXPERIMENT_BUNDLE_VERSION } from "@/experiments/persistence/serializer";
+import { useFirebase } from "@/firebase/FirebaseProvider";
+import type { AtomicBookmarkDoc, CloudExperimentDoc, UserAccountDoc } from "@/firebase/validation";
 
 const LAYER_PALETTE = ["#f59e0b", "#38bdf8", "#a78bfa", "#34d399", "#fb7185", "#facc15", "#60a5fa", "#f472b6", "#4ade80", "#fbbf24", "#22d3ee", "#c084fc", "#fb923c", "#a3e635", "#e879f9", "#2dd4bf", "#f87171", "#818cf8", "#fde047"];
 
@@ -54,6 +57,9 @@ export default function App() {
   const sub = useMemo(() => activeSubshell(state, element), [state, element]);
 
   const lab = useAtomsLaboratory(state.Z, state.n, state.l, state.m, state.basis);
+  const firebase = useFirebase();
+  const syncedCloudRef = useRef<Map<string, string>>(new Map());
+  const pendingBookmarkRef = useRef<{ Z: number; N: number } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<OrbitalScene | null>(null);
@@ -510,6 +516,88 @@ export default function App() {
 
   const resetCamera = useCallback(() => sceneRef.current?.resetCamera(), []);
 
+  // Automatically sync newly completed experiments to Cloud Firestore when authenticated & verified
+  useEffect(() => {
+    if (!firebase.user || !firebase.user.emailVerified) {
+      syncedCloudRef.current.clear();
+      return;
+    }
+    for (const entry of lab.history) {
+      const lastExec = entry.executions[entry.executions.length - 1];
+      if (!lastExec || lastExec.status !== "completed") continue;
+      const sig = `${entry.executions.length}:${entry.latestResult?.resultId ?? "none"}`;
+      if (syncedCloudRef.current.get(entry.definition.id) === sig) continue;
+      syncedCloudRef.current.set(entry.definition.id, sig);
+      void firebase
+        .syncExperiment({
+          definition: entry.definition,
+          executions: entry.executions,
+          latestResult: entry.latestResult,
+        })
+        .catch(() => {
+          // Non-fatal: local IndexedDB remains authoritative; allow retry on next update
+          syncedCloudRef.current.delete(entry.definition.id);
+        });
+    }
+  }, [firebase, firebase.user, lab.history]);
+
+  // Apply non-neutral electronCount N from a bookmark after useAtomsLaboratory's prevZ reset
+  useEffect(() => {
+    const pending = pendingBookmarkRef.current;
+    if (pending && state.Z === pending.Z) {
+      pendingBookmarkRef.current = null;
+      if (lab.config.electronCount !== pending.N) {
+        lab.patchConfig({ electronCount: pending.N });
+      }
+    }
+  }, [state.Z, lab]);
+
+  const handleApplyBookmark = useCallback(
+    (bm: AtomicBookmarkDoc) => {
+      pendingBookmarkRef.current = { Z: bm.Z, N: bm.N };
+      if (bm.Z !== state.Z) {
+        dispatch({ type: "selectElement", Z: bm.Z });
+      } else if (lab.config.electronCount !== bm.N) {
+        lab.patchConfig({ electronCount: bm.N });
+      }
+      lab.patchConfig({
+        electronCount: bm.N,
+        theoryMode: bm.theoryMode,
+        workspace: bm.workspace,
+      });
+    },
+    [state.Z, lab],
+  );
+
+  const handleApplyCloudPreferences = useCallback(
+    (account: UserAccountDoc) => {
+      if (account.preferredZ !== state.Z) {
+        dispatch({ type: "selectElement", Z: account.preferredZ });
+      }
+      lab.patchConfig({ theoryMode: account.preferredTheoryMode });
+    },
+    [state.Z, lab],
+  );
+
+  const handleImportCloudExperiment = useCallback(
+    async (ce: CloudExperimentDoc) => {
+      const bundle = {
+        format: EXPERIMENT_BUNDLE_FORMAT,
+        bundleVersion: EXPERIMENT_BUNDLE_VERSION,
+        exportedAtIso: new Date().toISOString(),
+        entries: [
+          {
+            definition: ce.definition,
+            executions: ce.executions,
+            results: ce.latestResult ? [ce.latestResult] : [],
+          },
+        ],
+      };
+      await lab.importExperimentJson(JSON.stringify(bundle));
+    },
+    [lab],
+  );
+
   const zeffActive = effectiveZ(state.model, element, sub);
   const currentNote = state.showCurrent && (state.basis !== "complex" || state.m === 0 || state.mode === "atom");
   const densityLabel = useDF
@@ -793,6 +881,9 @@ export default function App() {
             executions={lab.executions}
             selectedResult={lab.selectedResult}
             platformNotice={lab.platformNotice}
+            currentZ={state.Z}
+            currentN={lab.atomicSystem.N}
+            currentTheoryMode={lab.config.theoryMode}
             onRunSingleState={() => {
               void lab.runSingleStateExperiment();
             }}
@@ -808,6 +899,9 @@ export default function App() {
             }}
             onExportJson={lab.exportExperimentJson}
             onImportJson={lab.importExperimentJson}
+            onApplyBookmark={handleApplyBookmark}
+            onApplyPreferences={handleApplyCloudPreferences}
+            onImportCloudExperiment={handleImportCloudExperiment}
           />
         </div>
       )}

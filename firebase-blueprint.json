@@ -1,0 +1,284 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Non-PII laboratory preferences and profile metadata for an authenticated ATOMS researcher.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the account owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name shown in the laboratory workspace header.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "role": {
+          "type": "string",
+          "description": "Fixed client role; admin privileges cannot be self-assigned.",
+          "enum": ["researcher"]
+        },
+        "preferredZ": {
+          "type": "integer",
+          "description": "Default selected atomic number Z (1..118)."
+        },
+        "preferredTheoryMode": {
+          "type": "string",
+          "description": "Default one-electron solver mode.",
+          "enum": ["schrodinger", "dirac"]
+        },
+        "preferredBasis": {
+          "type": "string",
+          "description": "Default Gaussian basis identifier for multi-electron HF and LS-CI.",
+          "enum": ["sto-3g", "6-31g", "cc-pvdz", "cc-pvtz", "aug-cc-pvtz", "def2-svp", "def2-tzvp"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the user account document was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the user account document was last updated."
+        }
+      },
+      "required": ["uid", "displayName", "role", "preferredZ", "preferredTheoryMode", "preferredBasis", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Strictly owner-isolated PII metadata (verified email and sign-in audit timestamps).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the parent user document.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified Google account email address.",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "emailVerified": {
+          "type": "boolean",
+          "description": "Whether Firebase Auth verified the user email."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last sign-in / update timestamp."
+        }
+      },
+      "required": ["uid", "email", "emailVerified", "createdAt", "updatedAt"]
+    },
+    "CloudExperimentRecord": {
+      "title": "CloudExperimentRecord",
+      "description": "Cloud-persisted ATOMS scientific experiment definition, execution status, and compact scalar/spectral result payload stored as native Firestore Maps and Lists.",
+      "type": "object",
+      "properties": {
+        "experimentId": {
+          "type": "string",
+          "description": "Unique experiment identifier.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the researcher who owns this experiment.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable experiment label.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "kind": {
+          "type": "string",
+          "description": "ATOMS ExperimentKind identifier.",
+          "enum": [
+            "total-density",
+            "single-state",
+            "energy-spectrum",
+            "e1-transition",
+            "spectroscopy-series",
+            "multi-electron-hf",
+            "ls-term-ci"
+          ]
+        },
+        "providerId": {
+          "type": "string",
+          "description": "PhysicsProvider identifier.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "providerVersion": {
+          "type": "string",
+          "description": "PhysicsProvider version string.",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "Z": {
+          "type": "integer",
+          "description": "Atomic number Z (1..118)."
+        },
+        "N": {
+          "type": "integer",
+          "description": "Electron count N (0..120)."
+        },
+        "constantsVersion": {
+          "type": "string",
+          "description": "Physical constants baseline tag (e.g. CODATA-2018).",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "definition": {
+          "type": "object",
+          "description": "Native Map representation of ExperimentDefinition (atom-exp/v1)."
+        },
+        "executions": {
+          "type": "array",
+          "description": "Bounded list of up to 10 recent ExperimentExecution records."
+        },
+        "latestResult": {
+          "type": "object",
+          "description": "Native Map representation of the latest ExperimentResultRecord (with large volumetric grids stripped to stay well below 1MB)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when first synced to Firestore."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated in Firestore."
+        }
+      },
+      "required": [
+        "experimentId",
+        "ownerUid",
+        "title",
+        "kind",
+        "providerId",
+        "providerVersion",
+        "Z",
+        "N",
+        "constantsVersion",
+        "definition",
+        "executions",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AtomicBookmark": {
+      "title": "AtomicBookmark",
+      "description": "Pinned element/ion/workspace configuration bookmark saved by an authenticated researcher.",
+      "type": "object",
+      "properties": {
+        "bookmarkId": {
+          "type": "string",
+          "description": "Unique bookmark identifier.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the bookmark owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "label": {
+          "type": "string",
+          "description": "Short bookmark label.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "Z": {
+          "type": "integer",
+          "description": "Atomic number Z (1..118)."
+        },
+        "N": {
+          "type": "integer",
+          "description": "Electron count N (0..120)."
+        },
+        "workspace": {
+          "type": "string",
+          "description": "Target ATOMS Laboratory workspace.",
+          "enum": [
+            "workbench",
+            "atomic-systems",
+            "quantum-states",
+            "energy-structure",
+            "transitions",
+            "spectroscopy",
+            "hartree-fock",
+            "atomic-terms",
+            "analysis",
+            "experiment-history"
+          ]
+        },
+        "theoryMode": {
+          "type": "string",
+          "description": "Preferred one-electron theory mode for the bookmarked system.",
+          "enum": ["schrodinger", "dirac"]
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional researcher note attached to this system.",
+          "minLength": 0,
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["bookmarkId", "ownerUid", "label", "Z", "N", "workspace", "theoryMode", "notes", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Non-PII researcher preferences and profile metadata, strictly readable and writable only by the verified owner."
+    },
+    "/users/{userId}/private/{privateDocId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Isolated PII document (`info`) containing verified email; strictly owner-only, list disabled."
+    },
+    "/users/{userId}/experiments/{experimentId}": {
+      "schema": { "$ref": "#/entities/CloudExperimentRecord" },
+      "description": "Cloud-synced ATOMS experiments owned by `{userId}`, gated by parent UserAccount existence and ownerUid invariants."
+    },
+    "/users/{userId}/bookmarks/{bookmarkId}": {
+      "schema": { "$ref": "#/entities/AtomicBookmark" },
+      "description": "Cloud-synced atomic system and workspace bookmarks owned by `{userId}`."
+    }
+  }
+}

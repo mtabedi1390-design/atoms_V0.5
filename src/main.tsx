@@ -2,9 +2,15 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { FirebaseProvider } from "./firebase/FirebaseProvider";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <FirebaseProvider>
+        <App />
+      </FirebaseProvider>
+    </ErrorBoundary>
   </StrictMode>
 );

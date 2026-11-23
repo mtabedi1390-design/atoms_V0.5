@@ -1,4 +1,5 @@
 import type { WorkspaceId } from "@/app/useAtomsLaboratory";
+import { useFirebase } from "@/firebase/FirebaseProvider";
 
 export interface WorkspaceDescriptor {
   readonly id: WorkspaceId;
@@ -25,6 +26,12 @@ interface WorkspaceNavProps {
 }
 
 export function WorkspaceNav({ active, onSelect, activeCount = 0 }: WorkspaceNavProps) {
+  const { user, authReady, signingIn, syncingId, userAccount, signInWithGoogle, signOutUser } =
+    useFirebase();
+
+  const researcherLabel =
+    userAccount?.displayName ?? user?.displayName ?? user?.email?.split("@")[0] ?? "Researcher";
+
   return (
     <nav
       aria-label="ATOMS Laboratory workspaces"
@@ -58,9 +65,42 @@ export function WorkspaceNav({ active, onSelect, activeCount = 0 }: WorkspaceNav
           );
         })}
       </div>
-      <span className="hidden shrink-0 font-mono text-[10px] text-zinc-500 xl:inline">
-        CODATA-2018 · Client-Local Quantum Lab
-      </span>
+
+      <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
+        <span className="hidden font-mono text-[10px] text-zinc-500 2xl:inline">
+          CODATA-2018 · Client-Local Quantum Lab
+        </span>
+        {!authReady ? (
+          <span className="font-mono text-[10px] text-zinc-500">Auth…</span>
+        ) : user ? (
+          <div className="flex items-center gap-1.5">
+            <span
+              className="rounded-sm border border-emerald-800/80 bg-emerald-950/50 px-1.5 py-0.5 font-mono text-[10px] text-emerald-300"
+              title={user.email ?? undefined}
+            >
+              {syncingId ? "Syncing…" : `Cloud: ${researcherLabel}`}
+            </span>
+            <button
+              type="button"
+              data-testid="firebase-signout-btn"
+              onClick={() => void signOutUser()}
+              className="rounded-sm border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-800"
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            data-testid="firebase-signin-btn"
+            disabled={signingIn}
+            onClick={() => void signInWithGoogle()}
+            className="rounded-sm border border-amber-500/50 bg-amber-950/30 px-2 py-0.5 text-[10px] font-medium text-amber-200 hover:bg-amber-900/40 disabled:opacity-50"
+          >
+            {signingIn ? "Signing in…" : "Sign in with Google"}
+          </button>
+        )}
+      </div>
     </nav>
   );
 }

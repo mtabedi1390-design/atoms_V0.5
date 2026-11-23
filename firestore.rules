@@ -1,0 +1,316 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Pillar 0: Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---- Pillar 3: Hardened Global Helpers ----
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function userExists(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function isValidBasis(basis) {
+      return basis in ['sto-3g', '6-31g', 'cc-pvdz', 'cc-pvtz', 'aug-cc-pvtz', 'def2-svp', 'def2-tzvp'];
+    }
+
+    function isValidWorkspace(ws) {
+      return ws in [
+        'workbench',
+        'atomic-systems',
+        'quantum-states',
+        'energy-structure',
+        'transitions',
+        'spectroscopy',
+        'hartree-fock',
+        'atomic-terms',
+        'analysis',
+        'experiment-history'
+      ];
+    }
+
+    function isValidExperimentKind(kind) {
+      return kind in [
+        'total-density',
+        'single-state',
+        'energy-spectrum',
+        'e1-transition',
+        'spectroscopy-series',
+        'multi-electron-hf',
+        'ls-term-ci'
+      ];
+    }
+
+    // ---- Pillar 2: Validation Blueprints (Synchronicity with firebase-blueprint.json) ----
+    function isValidUserAccount(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'role', 'preferredZ', 'preferredTheoryMode', 'preferredBasis', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'role', 'preferredZ', 'preferredTheoryMode', 'preferredBasis', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 80
+        && data.role == 'researcher'
+        && data.preferredZ is int
+        && data.preferredZ >= 1
+        && data.preferredZ <= 118
+        && data.preferredTheoryMode in ['schrodinger', 'dirac']
+        && isValidBasis(data.preferredBasis)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateInfo(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'emailVerified', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'emailVerified', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && data.emailVerified is bool
+        && data.emailVerified == true
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCloudExperiment(data, userId, experimentId) {
+      return data.keys().hasAll([
+          'experimentId', 'ownerUid', 'title', 'kind', 'providerId', 'providerVersion',
+          'Z', 'N', 'constantsVersion', 'definition', 'executions', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'experimentId', 'ownerUid', 'title', 'kind', 'providerId', 'providerVersion',
+          'Z', 'N', 'constantsVersion', 'definition', 'executions', 'latestResult', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.experimentId)
+        && data.experimentId == experimentId
+        && isValidId(data.ownerUid)
+        && data.ownerUid == userId
+        && data.ownerUid == request.auth.uid
+        && data.title is string
+        && data.title.size() >= 1
+        && data.title.size() <= 140
+        && isValidExperimentKind(data.kind)
+        && data.providerId is string
+        && data.providerId.size() >= 1
+        && data.providerId.size() <= 64
+        && data.providerVersion is string
+        && data.providerVersion.size() >= 1
+        && data.providerVersion.size() <= 32
+        && data.Z is int
+        && data.Z >= 1
+        && data.Z <= 118
+        && data.N is int
+        && data.N >= 0
+        && data.N <= 120
+        && data.constantsVersion is string
+        && data.constantsVersion.size() >= 1
+        && data.constantsVersion.size() <= 32
+        && data.definition is map
+        && data.executions is list
+        && data.executions.size() <= 10
+        && (data.executions.size() == 0 || data.executions[0] is map)
+        && (!('latestResult' in data) || data.latestResult is map)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAtomicBookmark(data, userId, bookmarkId) {
+      return data.keys().hasAll([
+          'bookmarkId', 'ownerUid', 'label', 'Z', 'N', 'workspace', 'theoryMode', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'bookmarkId', 'ownerUid', 'label', 'Z', 'N', 'workspace', 'theoryMode', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.bookmarkId)
+        && data.bookmarkId == bookmarkId
+        && isValidId(data.ownerUid)
+        && data.ownerUid == userId
+        && data.ownerUid == request.auth.uid
+        && data.label is string
+        && data.label.size() >= 1
+        && data.label.size() <= 100
+        && data.Z is int
+        && data.Z >= 1
+        && data.Z <= 118
+        && data.N is int
+        && data.N >= 0
+        && data.N <= 120
+        && isValidWorkspace(data.workspace)
+        && data.theoryMode in ['schrodinger', 'dirac']
+        && data.notes is string
+        && data.notes.size() <= 500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // ---- Collection: /users/{userId} (Non-PII Preferences Only) ----
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().role == existing().role
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'preferredZ', 'preferredTheoryMode', 'preferredBasis', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+
+      // ---- Subcollection: /users/{userId}/private/{privateDocId} (Isolated PII) ----
+      match /private/{privateDocId} {
+        allow get: if isValidId(userId)
+          && isValidId(privateDocId)
+          && privateDocId == 'info'
+          && isOwner(userId)
+          && userExists(userId);
+        allow list: if false;
+
+        allow create: if isValidId(userId)
+          && isValidId(privateDocId)
+          && privateDocId == 'info'
+          && isOwner(userId)
+          && isValidUserPrivateInfo(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && userExists(userId);
+
+        allow update: if isValidId(userId)
+          && isValidId(privateDocId)
+          && privateDocId == 'info'
+          && isOwner(userId)
+          && isValidUserPrivateInfo(incoming(), userId)
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'email', 'emailVerified', 'updatedAt'
+          ])
+          && userExists(userId);
+
+        allow delete: if false;
+      }
+
+      // ---- Subcollection: /users/{userId}/experiments/{experimentId} ----
+      match /experiments/{experimentId} {
+        allow get: if isValidId(userId)
+          && isValidId(experimentId)
+          && isOwner(userId)
+          && userExists(userId);
+
+        allow list: if isValidId(userId)
+          && isOwner(userId)
+          && resource.data.ownerUid == request.auth.uid;
+
+        allow create: if isValidId(userId)
+          && isValidId(experimentId)
+          && isOwner(userId)
+          && isValidCloudExperiment(incoming(), userId, experimentId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && userExists(userId);
+
+        allow update: if isValidId(userId)
+          && isValidId(experimentId)
+          && isOwner(userId)
+          && isValidCloudExperiment(incoming(), userId, experimentId)
+          && incoming().experimentId == existing().experimentId
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'kind', 'providerId', 'providerVersion', 'Z', 'N',
+            'constantsVersion', 'definition', 'executions', 'latestResult', 'updatedAt'
+          ])
+          && userExists(userId);
+
+        allow delete: if isValidId(userId)
+          && isValidId(experimentId)
+          && isOwner(userId)
+          && userExists(userId);
+      }
+
+      // ---- Subcollection: /users/{userId}/bookmarks/{bookmarkId} ----
+      match /bookmarks/{bookmarkId} {
+        allow get: if isValidId(userId)
+          && isValidId(bookmarkId)
+          && isOwner(userId)
+          && userExists(userId);
+
+        allow list: if isValidId(userId)
+          && isOwner(userId)
+          && resource.data.ownerUid == request.auth.uid;
+
+        allow create: if isValidId(userId)
+          && isValidId(bookmarkId)
+          && isOwner(userId)
+          && isValidAtomicBookmark(incoming(), userId, bookmarkId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && userExists(userId);
+
+        allow update: if isValidId(userId)
+          && isValidId(bookmarkId)
+          && isOwner(userId)
+          && isValidAtomicBookmark(incoming(), userId, bookmarkId)
+          && incoming().bookmarkId == existing().bookmarkId
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'label', 'Z', 'N', 'workspace', 'theoryMode', 'notes', 'updatedAt'
+          ])
+          && userExists(userId);
+
+        allow delete: if isValidId(userId)
+          && isValidId(bookmarkId)
+          && isOwner(userId)
+          && userExists(userId);
+      }
+    }
+  }
+}
