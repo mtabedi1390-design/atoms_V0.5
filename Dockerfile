@@ -9,7 +9,7 @@ RUN npm install --no-audit --no-fund && npm install firebase --no-audit --no-fun
 COPY tsconfig.json vite.config.ts index.html firebase-blueprint.json ./
 COPY public ./public
 COPY src ./src
-RUN echo "{}" > firebase-applet-config.json
+RUN echo '{"apiKey":"","authDomain":"","projectId":"","storageBucket":"","messagingSenderId":"","appId":"","firestoreDatabaseId":"(default)"}' > firebase-applet-config.json
 
 RUN npm run typecheck && npm run build
 
