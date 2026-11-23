@@ -1,0 +1,17 @@
+.git
+.gitignore
+node_modules
+.venv
+dist
+build
+build-core-*
+test-results
+playwright-report
+releases
+*.zip
+.aistudio
+public/assets/aistudio
+__pycache__
+*.pyc
+.vscode
+npm-debug.log*
