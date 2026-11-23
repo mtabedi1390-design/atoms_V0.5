@@ -1,3 +1,16 @@
+---
+title: Atoms Quantum Lab
+emoji: ⚛️
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 3000
+pinned: false
+license: apache-2.0
+short_description: Browser-based 3D quantum atomic orbital & Hartree-Fock lab
+---
+
+
 # ATOMS v0.7.1 — Atomic Term Structure, LS-Coupled CI & Multi-Electron Laboratory
 
 **ATOMS (`v0.7.1`)** extends the `v0.7.0` live **PySCF `2.15.1` + `libcint` + Basis Set Exchange `0.12`** multi-electron Hartree–Fock laboratory with **exact Russell–Saunders $LS$ term enumeration, $(L^2, S^2, \Pi)$ Configuration State Function (CSF) projection, and Fixed-Orbital $LS$-Coupled Multiconfiguration CI**, while preserving 100% of `v0.5.0`, `v0.6.1`, and `v0.7.0` solvers, datasets, and experiment workflows.
