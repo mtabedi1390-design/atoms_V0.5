@@ -2,6 +2,24 @@
 
 All notable changes to **ATOMS** are documented in this file.
 
+## [0.7.1] — 2026-11-23 (Atomic Term Structure & LS-Coupled Multiconfiguration CI)
+
+### Added
+- **Russell–Saunders Term Enumeration & Angular Coupling (`src/physics/ls/`)**:
+  - Added `terms.ts` with exact equivalent-electron Slater microstate decomposition (`s, p, d, f, g, h`), configuration parity $\Pi = (-1)^{\sum q_i \ell_i}$, Racah seniority $v$ tracking for repeated terms ($d^3\,{}^2D$ $v=1,3$), multi-shell Clebsch–Gordan coupling (reusing ATOMS's `wigner3j`), unsplit $J$ listing, and `[He]`/`[Ne]`/`[Ar]` configuration string parsing.
+  - Added `catalog.ts` (13 curated neutral/ionic presets + `Z=1..30, N>=2` BSE-consistent gating), `benchmarks.ts` (pinned NIST ASD `(2J+1)`-weighted term centroids + `ATSP2K` published MCHF references), and `transport.ts` (blob-Worker-safe `resolveBaseUrl` origin resolution for `/api/ls/*`).
+- **Fixed-Orbital LS-Coupled CI Backend (`science/ls_ci_backend.py`, `server.ts`)**:
+  - Audited upstream `ATSP2K` (`ADLY_v2_0`, CPC non-redistribution licence), CompAS `atsp`/`atsp-book`/`spmchf`/`sphf`, and PySCF (`docs/ATOMIC_LS_SOLVER_AUDIT.md`).
+  - Implemented `science/ls_ci_backend.py`: transforms PySCF `AtomSphAverageRHF` radial shells via `sph_pure2real` to Condon–Shortley complex spherical orbitals, builds second-quantized $(L^2, S^2, \Pi)$ Casimir projection operators, extracts orthogonal LS-CSFs using `numpy.linalg.eigh` (`dsyevd`, resolving LAPACK `dsyevr` 76-D nullspace orthogonality loss discovered on `Fe`), builds sparse/dense Slater–Condon Hamiltonians across `single-config`, `valence-cas`, `valence-plus-virtuals` (`CIS`/`CISD`/CAS), and `custom-configs`, enforces pre-allocation caps (`12,000` dets, `2,500` CSFs), and cross-checks CAS eigenvalues against `pyscf.fci.direct_spin1` to `< 1e-12 Ha`.
+  - Mounted `GET /api/ls/capabilities` and `POST /api/ls/calculate` behind `validateLocalApiOrigin` in `server.ts` while leaving `/api/hf/*` untouched.
+- **Domain, Provider & `Atomic Terms & CI` Workspace**:
+  - Registered `LSTermCIState` (`src/domain/quantum`), `ls-term-ci` experiment schema/registry (`src/experiments/`), `atoms-ls-term-ci` provider (`src/physics/providers/lsTermCi/`), and 10th UI tab `AtomicTermsWorkspace.tsx` with explicit `METHOD: FIXED-ORBITAL LS-COUPLED CI` / `MCHF NOT performed` disclosures, interactive term rows, multi-root spectra, CSF parentage weights, and NIST/ATSP2K comparisons.
+- **Validation & Documentation**:
+  - Added `src/physics/__tests__/lsTermCi.test.ts` (`7` suites) and `tests/browser/atomicTerms.spec.ts` (`2` Playwright specs); full verified suite now passes **141 Vitest tests (18 files)**, **340 C++17 Debug/Release checks**, and **27 Playwright browser scenarios**.
+  - Added `ATOMIC_LS_SOLVER_AUDIT.md`, `ATOMIC_TERM_STRUCTURE.md`, `CSF_GENERATION_AND_ANGULAR_MOMENTUM.md`, `LS_COUPLED_CI.md`, `MCHF_AND_ORBITAL_OPTIMIZATION.md`, and `ATOMIC_TERM_VALIDATION.md`; updated version metadata (`package.json`, `index.html`) and all workspace/API/validation guides to `v0.7.1`.
+
+---
+
 ## [0.7.0] — 2026-11-22 (Multi-Electron Atomic Structure)
 
 ### Added

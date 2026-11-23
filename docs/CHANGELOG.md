@@ -2,6 +2,13 @@
 
 All notable changes to **ATOMS** are documented in this file. See also [`../CHANGELOG.md`](../CHANGELOG.md).
 
+## [0.7.1] — 2026-11-23 (Atomic Term Structure & LS-Coupled Multiconfiguration CI)
+
+- Audited CompAS/academic (`ATSP2K`, `atsp`, `atsp-book`, `spmchf`, `sphf`) and PySCF modules (`docs/ATOMIC_LS_SOLVER_AUDIT.md`) and implemented **Fixed-Orbital LS-Coupled Multiconfiguration CI** (`science/ls_ci_backend.py` + `src/physics/ls/`) mounted at `GET /api/ls/capabilities` & `POST /api/ls/calculate` alongside preserved `/api/hf/*`.
+- Added exact Russell–Saunders term enumeration (parity, Racah seniority $v$ on $d^q$, multi-shell Clebsch–Gordan coupling via `wigner3j`), exact $(L^2, S^2, \Pi)$ Casimir CSF projection (upgraded from `scipy.linalg.eigh` `dsyevr` to `numpy.linalg.eigh` `dsyevd` + conditional QR polish to fix 76-D nullspace non-orthogonality on `Fe`), Slater–Condon CI across `single-config` / `valence-cas` / `valence-plus-virtuals` / `custom-configs`, and `pyscf.fci.direct_spin1` oracle cross-checks (`< 1e-12 Ha`).
+- Integrated `LSTermCIState`, `atoms-ls-term-ci` provider, `ls-term-ci` Worker/IndexedDB experiment ledger support, and the 10th laboratory tab (`Atomic Terms & CI`) with explicit **Fixed-Orbital CI (MCHF NOT performed)** disclosure and NIST ASD / `ATSP2K` benchmarks.
+- **Verification**: 18 Vitest suites (**141 tests**), **340** C++17 native checks (Debug + Release), **27** Playwright full-stack browser scenarios (including live `C ³P` LS-CI -> IndexedDB replay and static HTML offline guard), and production `node server.ts` verification.
+
 ## [0.7.0] — 2026-11-22 (Multi-Electron Atomic Structure)
 
 - Integrated live **PySCF `2.15.1` + `libcint` + Basis Set Exchange `0.12`** multi-electron Hartree–Fock (`RHF (det)`, `UHF (det)`, `ROHF (det)`, `AtomSphAvg (ensemble)`) via Express 5 API (`/api/hf/capabilities`, `/api/hf/calculate`, `127.0.0.1` loopback default with `--host`/`--port` overrides, Host/Origin `403` protection, `EADDRINUSE` diagnostics, and clean child reaping) and `pyscf-hf-live` (`0.7.0`) provider.

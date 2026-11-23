@@ -20,7 +20,9 @@ export type ProviderCapability =
   | "multi-electron-hf"
   | "orbital-resolved-hf"
   | "spin-density"
-  | "scf-diagnostics";
+  | "scf-diagnostics"
+  | "ls-term-ci"
+  | "ls-term-enumeration";
 
 export type ObservableKind = ProviderCapability;
 

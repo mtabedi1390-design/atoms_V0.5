@@ -87,6 +87,16 @@ const BUILTIN_EXPERIMENT_DESCRIPTORS: readonly ExperimentKindDescriptor[] = [
     ],
     implementedInCurrentRelease: true,
   },
+  {
+    kind: "ls-term-ci",
+    label: "Atomic LS-Term Structure & Fixed-Orbital CI",
+    description: "Russell–Saunders (L^2, S^2, Π)-coupled multiconfiguration CI using SO(3)-symmetric AtomSphAverageRHF radial orbitals.",
+    minStates: 1,
+    maxStates: 1,
+    requiresTransition: false,
+    defaultObservables: ["ls-term-ci", "ls-term-enumeration", "total-energy"],
+    implementedInCurrentRelease: true,
+  },
 ];
 
 export class ExperimentRegistry {

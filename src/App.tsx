@@ -15,6 +15,7 @@ import { SpectroscopyWorkspace } from "@/components/laboratory/SpectroscopyWorks
 import { AnalysisWorkspace } from "@/components/laboratory/AnalysisWorkspace";
 import { ExperimentHistoryWorkspace } from "@/components/laboratory/ExperimentHistoryWorkspace";
 import { HartreeFockWorkspace } from "@/components/laboratory/HartreeFockWorkspace";
+import { AtomicTermsWorkspace } from "@/components/laboratory/AtomicTermsWorkspace";
 import { useAtomsLaboratory } from "@/app/useAtomsLaboratory";
 import { elementByZ } from "@/data/elements";
 import { lFromKappa } from "@/domain/quantum";
@@ -581,7 +582,7 @@ export default function App() {
           )}
           <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1 text-[10px] text-zinc-400">
             <ScaleBar extentPm={extentPm} />
-            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.7.0</span>
+            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.7.1</span>
             {hfOverlayActive && lab.hfWorkbenchOverlay && (
               <div className="pointer-events-auto flex items-center gap-2 rounded-sm border border-sky-800 bg-sky-950/75 px-2 py-1 text-sky-200">
                 <span>
@@ -745,6 +746,23 @@ export default function App() {
             onClearWorkbenchOverlay={() => {
               lab.patchConfig({ showHFVolumeInWorkbench: false });
             }}
+          />
+        </div>
+      )}
+
+      {lab.config.workspace === "atomic-terms" && (
+        <div className="min-h-0 flex-1">
+          <AtomicTermsWorkspace
+            initialZ={state.Z}
+            capabilities={lab.lsCapabilities}
+            probing={lab.lsProbing}
+            executions={lab.executions}
+            selectedResult={lab.selectedResult}
+            onRefreshCapabilities={(refresh) => {
+              void lab.refreshLSCapabilities(refresh);
+            }}
+            onCancelExecution={lab.cancelExecution}
+            onRunLSCI={lab.runLSTermCIExperiment}
           />
         </div>
       )}

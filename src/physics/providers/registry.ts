@@ -19,6 +19,7 @@ import {
 } from "./legacyAdapters";
 import { diracCoulombV6Provider } from "./dirac";
 import { pyscfLiveProvider } from "./hartreeFock";
+import { lsTermCiProvider } from "./lsTermCi";
 import { schrodingerCoulombV6Provider } from "./schrodinger";
 
 export interface ProviderAssessmentEntry {
@@ -73,6 +74,7 @@ export function createDefaultProviderRegistry(): PhysicsProviderRegistry {
     schrodingerCoulombV6Provider,
     diracCoulombV6Provider,
     pyscfLiveProvider,
+    lsTermCiProvider,
     lobatoDiracFockV6Provider,
     pyscfHartreeFockV6Provider,
     slaterV6Provider,

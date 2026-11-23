@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const BACKEND_SCRIPT = path.resolve(__dirname, "science", "hf_backend.py");
+const LS_BACKEND_SCRIPT = path.resolve(__dirname, "science", "ls_ci_backend.py");
 const IS_PROD = process.env.NODE_ENV === "production";
 
 interface ServerCliArgs {
@@ -149,8 +150,13 @@ function candidatePythonExecutables(): string[] {
   return list;
 }
 
-function runPythonJsonSync(executable: string, payload: unknown, timeoutMs = 15000): Record<string, unknown> {
-  const stdout = execFileSync(executable, [BACKEND_SCRIPT], {
+function runPythonJsonSync(
+  executable: string,
+  payload: unknown,
+  timeoutMs = 15000,
+  scriptPath: string = BACKEND_SCRIPT,
+): Record<string, unknown> {
+  const stdout = execFileSync(executable, [scriptPath], {
     input: JSON.stringify(payload),
     encoding: "utf8",
     timeout: timeoutMs,
@@ -172,13 +178,14 @@ function withRuntimeDiagnostics(cap: Record<string, unknown>): Record<string, un
   };
 }
 
-function detectPythonBackend(): PythonDetection {
-  if (!existsSync(BACKEND_SCRIPT)) {
+function detectPythonBackendForScript(scriptPath: string, unavailableFallback: Record<string, unknown>): PythonDetection {
+  if (!existsSync(scriptPath)) {
     return {
       executable: null,
       capabilities: withRuntimeDiagnostics({
+        ...unavailableFallback,
         available: false,
-        blocker: `Missing computational script: ${BACKEND_SCRIPT}`,
+        blocker: `Missing computational script: ${scriptPath}`,
       }),
     };
   }
@@ -186,7 +193,7 @@ function detectPythonBackend(): PythonDetection {
   for (const exe of candidatePythonExecutables()) {
     if (exe.includes(path.sep) && !existsSync(exe)) continue;
     try {
-      const cap = runPythonJsonSync(exe, { action: "capabilities" }, 15000);
+      const cap = runPythonJsonSync(exe, { action: "capabilities" }, 15000, scriptPath);
       if (cap.available === true) {
         return {
           executable: exe,
@@ -201,6 +208,7 @@ function detectPythonBackend(): PythonDetection {
   return {
     executable: null,
     capabilities: withRuntimeDiagnostics({
+      ...unavailableFallback,
       available: false,
       blocker:
         "No Python environment with PySCF + Basis Set Exchange was found. Run `bash scripts/setup_python_backend.sh` (or set ATOMS_PYTHON) and restart the ATOMS server.",
@@ -212,9 +220,21 @@ function detectPythonBackend(): PythonDetection {
 let cachedDetection: PythonDetection | null = null;
 function getDetection(refresh = false): PythonDetection {
   if (!cachedDetection || refresh) {
-    cachedDetection = detectPythonBackend();
+    cachedDetection = detectPythonBackendForScript(BACKEND_SCRIPT, {});
   }
   return cachedDetection;
+}
+
+let cachedLSDetection: PythonDetection | null = null;
+function getLSDetection(refresh = false): PythonDetection {
+  if (!cachedLSDetection || refresh) {
+    cachedLSDetection = detectPythonBackendForScript(LS_BACKEND_SCRIPT, {
+      method: "fixed-orbital-ls-ci",
+      orbitalSource: "atom-sph-avg-hf",
+      orbitalOptimizationSupported: false,
+    });
+  }
+  return cachedLSDetection;
 }
 
 const activeChildren = new Set<ChildProcess>();
@@ -248,9 +268,10 @@ function runPythonCalculation(
   req: Request,
   res: Response,
   timeoutMs = 90000,
+  scriptPath: string = BACKEND_SCRIPT,
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, [BACKEND_SCRIPT], {
+    const child = spawn(executable, [scriptPath], {
       stdio: ["pipe", "pipe", "pipe"],
     });
     activeChildren.add(child);
@@ -402,6 +423,56 @@ async function startServer(): Promise<void> {
     }
   });
 
+  // Guard LS-CI computational endpoints with identical local origin protection.
+  app.use("/api/ls", validateLocalApiOrigin);
+
+  app.get("/api/ls/capabilities", (req: Request, res: Response) => {
+    const refresh = req.query.refresh === "1";
+    const det = getLSDetection(refresh);
+    res.json(det.capabilities);
+  });
+
+  app.post("/api/ls/calculate", async (req: Request, res: Response) => {
+    const det = getLSDetection(false);
+    if (!det.executable) {
+      res.status(503).json({
+        ok: false,
+        code: "BACKEND_UNAVAILABLE",
+        error: String(det.capabilities.blocker ?? "LS-CI Python backend unavailable."),
+      });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown> | undefined;
+    if (!body || typeof body !== "object") {
+      res.status(400).json({ ok: false, code: "INVALID_REQUEST", error: "JSON request body required." });
+      return;
+    }
+
+    try {
+      const result = await runPythonCalculation(
+        det.executable,
+        { ...body, action: "calculate" },
+        req,
+        res,
+        120000,
+        LS_BACKEND_SCRIPT,
+      );
+      if (result.error && result.ok === false) {
+        res.status(400).json(result);
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "CLIENT_ABORTED") {
+        if (!res.headersSent) res.status(499).end();
+        return;
+      }
+      res.status(500).json({ ok: false, code: "CALCULATION_ERROR", error: msg });
+    }
+  });
+
   let viteServer: { middlewares: express.RequestHandler; close: () => Promise<void> } | null = null;
 
   if (!IS_PROD) {
@@ -482,11 +553,12 @@ async function startServer(): Promise<void> {
 
   httpServer.listen(PORT, BIND_HOST, () => {
     const det = getDetection(false);
+    const lsDet = getLSDetection(false);
     const engine = (det.capabilities.engine as { version?: string } | undefined)?.version;
     console.log(
       `ATOMS server listening on http://${BIND_HOST}:${PORT} (${IS_PROD ? "production" : "development"}) · PySCF: ${
         det.executable ? `active (${engine ?? "unknown"})` : "unavailable"
-      }`,
+      } · LS-CI: ${lsDet.executable ? "active" : "unavailable"}`,
     );
   });
 }

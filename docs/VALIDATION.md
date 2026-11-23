@@ -1,6 +1,6 @@
-# ATOMS v0.7.0 — Scientific & Software Validation Report
+# ATOMS v0.7.1 — Scientific & Software Validation Report
 
-All verification commands reported below were executed cleanly against the final `v0.7.0` codebase (no tests were weakened, skipped, or fabricated). See also [`MULTI_ELECTRON_VALIDATION.md`](./MULTI_ELECTRON_VALIDATION.md) for the complete PySCF vs `compas/sphf` & Koga–Thakkar 1999 numerical table.
+All verification commands reported below were executed cleanly against the final `v0.7.1` codebase (no tests were weakened, skipped, or fabricated). See [`ATOMIC_TERM_VALIDATION.md`](./ATOMIC_TERM_VALIDATION.md) for the complete LS-CI vs `pyscf.fci` & NIST ASD centroid benchmark tables, and [`MULTI_ELECTRON_VALIDATION.md`](./MULTI_ELECTRON_VALIDATION.md) for `v0.7.0` HF vs `compas/sphf`.
 
 ---
 
@@ -8,19 +8,23 @@ All verification commands reported below were executed cleanly against the final
 
 | Suite / Command | Scope Covered | Result | Verified Outcome |
 |---|---|---|---|
-| `npm run data:build` | SHA-256 verification of `nist_asd_ie.tsv`, `lobato2026_*`, charge integral across `Z=1..118` | **PASS** | 108 NIST + 118 Dirac–Fock JSONs verified |
-| `npm run data:matrix` | 118-element observable coverage audit | **PASS** | 118 rows generated into `docs/ACCURACY_MATRIX.md` |
 | `npm run typecheck` (`npm run lint`) | Strict TypeScript compilation (`tsc --noEmit -p tsconfig.json`) | **PASS** | 0 errors across all modules |
 | `npm run test:native` | C++17 `native/quantum_core.hpp` Debug (`-O0 -g`) & Release (`-O2 -DNDEBUG`) | **PASS** | **340 checks, 0 failures** (both Debug & Release) |
-| `npm test` (Vitest) | Unit, Domain, Schrödinger, Dirac, Transitions, Spectroscopy, Stabilization, **Live PySCF HF**, Sampling, Visualization, Experiment Platform, C++ Parity | **PASS** | **17 test files, 134/134 tests passed** |
-| `npm run build` | Vite production single-file client bundle + inline Web Workers | **PASS** | `dist/index.html` built cleanly (0 errors) |
-| `npm run test:browser` (Playwright) | Full-stack Express 5 + Python PySCF + Chromium + SwiftShader WebGL2 (`core`, `responsive`, `science`, `laboratory`, `hartreeFock`) | **PASS** | `v0.5`/`v0.6.1` regression (21 tests) + `v0.7.0` HF state taxonomy, `AtomSphAvg`, & offline/static guards (4 tests) = **25/25 passing** |
-| Layer isolation audit | Grep `src/domain`, `src/physics`, `src/experiments`, `src/numerics`, `src/sampling` (excl. `__tests__`) for `react`, `three`, `node:` | **PASS** | **0 matches** |
-| Workstream B & C runtime checks | Direct `compas/sphf` build/execution (`gfortran 12.3.0`), isolated `setup_python_backend.sh`, server start/stop/restart, Origin `403`, `EADDRINUSE`, & `vite preview` static mode | **PASS** | Verified end-to-end on Linux `x86_64` with zero orphaned processes |
+| `npm test` (Vitest) | Unit, Domain, Schrödinger, Dirac, Transitions, Spectroscopy, Stabilization, **Live PySCF HF**, **LS Term Enumeration & LS-Coupled CI**, Sampling, Visualization, Experiment Platform, C++ Parity | **PASS** | **18 test files, 141/141 tests passed** |
+| `npm run build` | Vite production single-file client bundle + inline Web Workers | **PASS** | `dist/index.html` built cleanly (`2.12 MB`, 0 errors) |
+| `npm run test:browser` (Playwright) | Full-stack Express 5 + Python PySCF + Chromium + SwiftShader WebGL2 (`core`, `responsive`, `science`, `laboratory`, `hartreeFock`, `atomicTerms`) | **PASS** | `v0.5`/`v0.6.1`/`v0.7.0` regression (25 tests) + `v0.7.1` Atomic Terms & LS-CI live + offline/HTML fallback (2 tests) = **27/27 passing** |
+| Layer isolation audit | Grep `src/physics`, `src/domain`, `src/experiments` (excl. `__tests__`) for `react`, `three`, `window`, `document` | **PASS** | **0 code matches** |
+| Production server smoke check | Direct `NODE_ENV=production ATOMS_HOST=0.0.0.0 PORT=3005 node server.ts` | **PASS** | HTTP 200 on `/api/hf/capabilities`, `/api/ls/capabilities`, and `POST /api/ls/calculate` (`C 3P`, `ortho=0`) |
 
 ---
 
 ## 2. Numerical & Scientific Cross-Checks Verified in Automated Tests
+
+### 2.0a Atomic Term Structure & Fixed-Orbital LS-Coupled CI (`lsTermCi.test.ts`, `atomicTerms.spec.ts`)
+- **Russell–Saunders Enumeration & Clebsch–Gordan Coupling**: Exact equivalent-shell microstate sum ($\sum (2L+1)(2S+1) = \binom{4\ell+2}{q}$) across $s, p^2, p^3, p^4, d^2, d^3$ (repeated $^2D$ with seniorities $v=1,3$), $d^5$, multi-shell $2p^1 3p^1$ (`36` states) and $2p^2 3d^1$ (`150` states, `even` parity), and Wigner-derived Clebsch–Gordan checks (`< 1e-12`).
+- **Operator Purity & `pyscf.fci.direct_spin1` Exact Oracle**: Across `He 1S`, `Be 1S`, `C 3P/1D/1S`, `N 4So/2Do/2Po`, `O 3P`, `Si 3P`, `V2+ 3d3 2D` (2 orthogonal roots), and `Fe 3d6 4s2 5D`, CSF orthonormality error `< 3e-15`, $H_{\text{CSF}}$ Hermiticity `< 3e-15 Ha`, $\langle L^2 \rangle$ & $\langle S^2 \rangle$ error/variance `< 6e-15`, and CAS-complete eigenvalues match PySCF determinant FCI identically (`0` to `6.6e-13 Ha`).
+- **Hund Multiplet Ordering & NIST ASD Centroids**: Exact `C I` $^3P < {}^1D < {}^1S$ and `N I` $^4S^\circ < {}^2D^\circ < {}^2P^\circ$ ordering with NIST ASD term-centroid excitation agreement (`< 0.5 eV` in `cc-pvdz`/`cc-pvtz`).
+- **Resource Limits & Honest Disclaimers**: `N=1` Hydrogen / `Z>30` / missing-BSE elements rejected cleanly; oversized `Fe` active space (`>12000` dets) cleanly raises safety error prior to allocation; `orbitalOptimizationSupported: false` and `Worker` + `MemoryExperimentStore`/`IndexedDB` replay verified.
 
 ### 2.0 Multi-Electron Hartree–Fock Engine (`hartreeFock.test.ts`, `hartreeFock.spec.ts`)
 - **1-Electron Analytic Limits (`H`, `He+`)**: Monotonic convergence toward $-Z^2/2$ (`H`: `-0.499821 Ha`, `He+`: `-1.994290 Ha`) with strict self-interaction cancellation $|J + K| < 10^{-11}\text{ Ha}$.

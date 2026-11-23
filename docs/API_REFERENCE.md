@@ -1,4 +1,4 @@
-# ATOMS v0.7.0 — TypeScript & Server API Reference
+# ATOMS v0.7.1 — TypeScript & Server API Reference
 
 All pure scientific modules under `src/domain/`, `src/physics/`, `src/experiments/`, `src/numerics/`, and `src/sampling/` have zero React, Three.js, or Node built-in dependencies (outside `__tests__`) and run cleanly in browsers, Vitest, or Web Workers.
 
@@ -14,14 +14,21 @@ All pure scientific modules under `src/domain/`, `src/physics/`, `src/experiment
 - `createSuperpositionState({ terms, basisKind })`
 - `createConfigurationAverageState(elementZ, groundTerm, isOpenShell, subshells)`
 - `createMultiElectronHFState({ N, method, basis, occupationMode, spin2S, subshellOccupations, useSymmetry, scfOptions, volumeGrid })` & `validateMultiElectronHFState(state)` (`v0.7.0`)
+- `createLSTermCIState({ N, basis, referenceConfiguration, targetL, targetSpin2S, targetParity, activeSpaceMode, frozenCoreSubshells?, activeShells?, customConfigurations?, maxExcitationRank?, nRoots, crossCheckPyscfFci })` & `validateLSTermCIState(state)` (`v0.7.1`)
 - Bijections: `jFromKappa(k)`, `lFromKappa(k)`, `lSmallFromKappa(k)`, `parityFromKappa(k)`, `kappaFromLJ(l, j)`
 
 ## 3. Units & Constants (`src/physics/units.ts`)
 - `CONSTANTS_VERSION` (`"CODATA-2018"`), `CODATA_2018`, `CODATA_2018_UNCERTAINTIES`, `EXTENDED_CONSTANTS`
 - `quantity(value, unit)`, `convertLength`, `convertEnergy`, `convertMass`, `convertCharge`, `convertFrequency`, `energyEvToWavelengthNm`
 
-## 4. Physics Providers & Live Multi-Electron HF (`src/physics/hf/`, `src/physics/providers/`)
+## 4. Physics Providers, Live HF (`v0.7.0`), & LS Term CI (`v0.7.1`)
 - `createDefaultProviderRegistry()` (`registry.ts`) -> `PhysicsProviderRegistry`
+- **Live Fixed-Orbital LS-Coupled CI (`lsTermCi/index.ts`, `ls/`)**:
+  - `createLSTermCiProvider(transport?)` / `lsTermCiProvider` (`id: "atoms-ls-term-ci"`, `version: "0.7.1"`)
+  - `parseConfigurationString(text)`, `formatConfigurationSpec(...)`, `computeConfigurationParity(...)`, `enumerateEquivalentSubshellTerms(l, q)`, `enumerateLSTerms(subshells)`, `formatTermSymbol(spin2S, L, parity, ascii?)`, `clebschGordan(...)` (`terms.ts`)
+  - `LS_CURATED_PRESETS`, `defaultLSConfigurationForSystem(Z, N)`, `assessLSCISupport({ Z, N, basis, configuration, capabilities? })` (`catalog.ts`)
+  - `NIST_LS_BENCHMARKS`, `ATSP2K_PUBLISHED_REFERENCES`, `lookupNISTBenchmarksForSystem(Z, N)`, `lookupNISTTermCentroid(...)` (`benchmarks.ts`)
+  - `HttpLSTransport`, `defaultHttpLSTransport`, `probeLSCapabilities(signal?, refresh?, baseUrl?)` (`transport.ts` — blob-Worker-safe origin resolution)
 - **Live PySCF Multi-Electron HF (`hartreeFock/index.ts`, `hf/`)**:
   - `createPyscfLiveProvider(transport?)` / `pyscfLiveProvider` (`id: "pyscf-hf-live"`, `version: "0.7.0"`)
   - `HF_BASIS_CATALOG`, `getBasisCatalogEntry(basis)`, `isBasisSupportedForZ(basis, Z, capabilities?)` (`basisCatalog.ts`)
@@ -41,6 +48,7 @@ All pure scientific modules under `src/domain/`, `src/physics/`, `src/experiment
 - `evaluate2DSlice(state, Z, reducedMassRatio, opts)`, `sampleDiracSpinorCloud(req)`, `sampleOrbital(...)`
 
 ## 7. Experiment Platform, Workers & Express Server (`src/experiments/`, `src/workers/`, `server.ts`)
-- `createExperimentDefinition`, `createDefaultExperimentRegistry` (supports `"multi-electron-hf"`), `validateExperimentDefinition`
+- `createExperimentDefinition`, `createDefaultExperimentRegistry` (supports `"multi-electron-hf"` and `"ls-term-ci"`), `validateExperimentDefinition`
 - `ExperimentRunner`, `ExperimentScheduler`, `assertStructuredCloneSafe`, `IndexedDBExperimentStore` / `MemoryExperimentStore`, `ExperimentSerializer`
-- `GET /api/hf/capabilities` (`?refresh=1`), `POST /api/hf/calculate` (`server.ts` Express 5 local Python PySCF bridge)
+- `GET /api/hf/capabilities`, `POST /api/hf/calculate` (`science/hf_backend.py`)
+- `GET /api/ls/capabilities` (`?refresh=1`), `POST /api/ls/calculate` (`science/ls_ci_backend.py`)

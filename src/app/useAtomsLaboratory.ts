@@ -18,6 +18,7 @@ import {
   type NuclearModel,
 } from "@/domain/atomic";
 import {
+  createLSTermCIState,
   createMultiElectronHFState,
   createNonRelativisticState,
   createRelativisticState,
@@ -59,6 +60,15 @@ import {
   type SubshellOccupation,
 } from "@/physics/hf";
 import { PYSCF_LIVE_PROVIDER_ID, PYSCF_LIVE_PROVIDER_VERSION } from "@/physics/providers/hartreeFock";
+import {
+  formatTermSymbol,
+  probeLSCapabilities,
+  type ConfigurationParity,
+  type LSActiveSpaceMode,
+  type LSCapabilitiesResponse,
+  type SubshellOccupancySpec,
+} from "@/physics/ls";
+import { LS_TERM_CI_PROVIDER_ID, LS_TERM_CI_PROVIDER_VERSION } from "@/physics/providers/lsTermCi";
 import type { DiracComponentView } from "@/workers/visualization.worker";
 
 export type WorkspaceId =
@@ -69,6 +79,7 @@ export type WorkspaceId =
   | "transitions"
   | "spectroscopy"
   | "hartree-fock"
+  | "atomic-terms"
   | "analysis"
   | "experiment-history";
 
@@ -244,6 +255,8 @@ export function useAtomsLaboratory(
   const [platformNotice, setPlatformNotice] = useState<string | null>(null);
   const [hfCapabilities, setHfCapabilities] = useState<HFCapabilitiesResponse | null>(null);
   const [hfProbing, setHfProbing] = useState<boolean>(false);
+  const [lsCapabilities, setLsCapabilities] = useState<LSCapabilitiesResponse | null>(null);
+  const [lsProbing, setLsProbing] = useState<boolean>(false);
   const [hfWorkbenchOverlay, setHfWorkbenchOverlay] = useState<HFWorkbenchOverlay | null>(null);
   const activeHandles = useRef(new Map<string, { cancel: (reason?: string) => void }>());
 
@@ -258,9 +271,21 @@ export function useAtomsLaboratory(
     }
   }, []);
 
+  const refreshLSCapabilities = useCallback(async (refresh = false) => {
+    setLsProbing(true);
+    try {
+      const cap = await probeLSCapabilities(undefined, refresh);
+      setLsCapabilities(cap);
+      return cap;
+    } finally {
+      setLsProbing(false);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshHFCapabilities();
-  }, [refreshHFCapabilities]);
+    void refreshLSCapabilities(false);
+  }, [refreshHFCapabilities, refreshLSCapabilities]);
 
   const refreshStore = useCallback(async () => {
     const store = storeRef.current;
@@ -487,6 +512,75 @@ export function useAtomsLaboratory(
     [submitExperiment],
   );
 
+  const runLSTermCIExperiment = useCallback(
+    async (params: {
+      readonly Z: number;
+      readonly N: number;
+      readonly basis: HFBasisId;
+      readonly referenceConfiguration: readonly SubshellOccupancySpec[];
+      readonly targetL: number;
+      readonly targetSpin2S: number;
+      readonly targetParity: ConfigurationParity;
+      readonly activeSpaceMode: LSActiveSpaceMode;
+      readonly frozenCoreSubshells?: readonly SubshellOccupancySpec[];
+      readonly activeShells?: readonly { readonly n: number; readonly l: number }[];
+      readonly customConfigurations?: readonly (readonly SubshellOccupancySpec[])[];
+      readonly maxExcitationRank?: number;
+      readonly nRoots: number;
+      readonly crossCheckPyscfFci: boolean;
+    }) => {
+      const iso = defaultIsotopeForZ(params.Z);
+      const lsSystem = createAtomicSystem({
+        Z: params.Z,
+        N: params.N,
+        massNumber: iso.massNumber,
+        nuclearModel: createNuclearModelForIsotope("point-infinite-mass", iso),
+      });
+      const lsState = createLSTermCIState({
+        N: params.N,
+        basis: params.basis,
+        referenceConfiguration: params.referenceConfiguration,
+        targetL: params.targetL,
+        targetSpin2S: params.targetSpin2S,
+        targetParity: params.targetParity,
+        activeSpaceMode: params.activeSpaceMode,
+        frozenCoreSubshells: params.frozenCoreSubshells,
+        activeShells: params.activeShells,
+        customConfigurations: params.customConfigurations,
+        maxExcitationRank: params.maxExcitationRank,
+        nRoots: params.nRoots,
+        crossCheckPyscfFci: params.crossCheckPyscfFci,
+      });
+
+      const chargeTag =
+        lsSystem.q === 0 ? "" : lsSystem.q > 0 ? `+${lsSystem.q}` : `${lsSystem.q}`;
+      const termSym = formatTermSymbol(params.targetSpin2S, params.targetL, params.targetParity);
+      const def = createExperimentDefinition({
+        kind: "ls-term-ci",
+        title: `${lsSystem.species.symbol}${chargeTag} ${termSym} LS-CI/${params.basis}`,
+        system: lsSystem,
+        quantumStates: [lsState],
+        providerId: LS_TERM_CI_PROVIDER_ID,
+        providerVersion: LS_TERM_CI_PROVIDER_VERSION,
+        observables: ["ls-term-ci", "ls-term-enumeration", "total-energy"],
+        modelParameters: {
+          basis: params.basis,
+          targetL: params.targetL,
+          targetSpin2S: params.targetSpin2S,
+          targetParity: params.targetParity,
+          activeSpaceMode: params.activeSpaceMode,
+          ...(params.maxExcitationRank !== undefined ? { maxExcitationRank: params.maxExcitationRank } : {}),
+        },
+        numericalParameters: {
+          nRoots: params.nRoots,
+          crossCheckPyscfFci: params.crossCheckPyscfFci,
+        },
+      });
+      return submitExperiment(def);
+    },
+    [submitExperiment],
+  );
+
   const cancelExecution = useCallback((executionId: string) => {
     activeHandles.current.get(executionId)?.cancel("Cancelled from ATOMS Laboratory UI");
   }, []);
@@ -595,13 +689,17 @@ export function useAtomsLaboratory(
     platformNotice,
     hfCapabilities,
     hfProbing,
+    lsCapabilities,
+    lsProbing,
     hfWorkbenchOverlay,
     setHfWorkbenchOverlay,
     refreshHFCapabilities,
+    refreshLSCapabilities,
     runSingleStateExperiment,
     runTransitionExperiment,
     runSpectroscopyExperiment,
     runHartreeFockExperiment,
+    runLSTermCIExperiment,
     cancelExecution,
     replayStoredExperiment,
     rerunStoredExperiment,

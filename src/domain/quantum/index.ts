@@ -19,6 +19,15 @@ import {
   type HFVolumeGridSpec,
   type SubshellOccupation,
 } from "@/physics/hf";
+import {
+  computeConfigurationParity,
+  formatConfigurationSpec,
+  formatTermSymbol,
+  validateConfigurationSpec,
+  type ConfigurationParity,
+  type LSActiveSpaceMode,
+  type SubshellOccupancySpec,
+} from "@/physics/ls";
 import { assertValid, validationFromIssues, type ValidationIssue, type ValidationResult } from "../validation";
 
 export interface NonRelativisticState {
@@ -72,12 +81,30 @@ export interface MultiElectronHFState {
   readonly volumeGrid?: HFVolumeGridSpec;
 }
 
+export interface LSTermCIState {
+  readonly kind: "ls-term-ci";
+  readonly N: number;
+  readonly basis: HFBasisId;
+  readonly referenceConfiguration: readonly SubshellOccupancySpec[];
+  readonly targetL: number;
+  readonly targetSpin2S: number;
+  readonly targetParity: ConfigurationParity;
+  readonly activeSpaceMode: LSActiveSpaceMode;
+  readonly frozenCoreSubshells?: readonly SubshellOccupancySpec[];
+  readonly activeShells?: readonly { readonly n: number; readonly l: number }[];
+  readonly customConfigurations?: readonly (readonly SubshellOccupancySpec[])[];
+  readonly maxExcitationRank?: number;
+  readonly nRoots: number;
+  readonly crossCheckPyscfFci: boolean;
+}
+
 export type QuantumState =
   | NonRelativisticState
   | RelativisticState
   | SuperpositionState
   | ConfigurationAverageState
-  | MultiElectronHFState;
+  | MultiElectronHFState
+  | LSTermCIState;
 
 export interface TransitionPair<TState extends NonRelativisticState | RelativisticState = NonRelativisticState | RelativisticState> {
   readonly initial: TState;
@@ -182,6 +209,14 @@ export function createMultiElectronHFState(
   return s;
 }
 
+export function createLSTermCIState(
+  params: Omit<LSTermCIState, "kind">,
+): LSTermCIState {
+  const s: LSTermCIState = { kind: "ls-term-ci", ...params };
+  assertValid(validateLSTermCIState(s), "createLSTermCIState");
+  return s;
+}
+
 export function validateRelativisticState(s: RelativisticState): ValidationResult {
   const issues: ValidationIssue[] = [];
   if (!Number.isInteger(s.n) || s.n < 1) {
@@ -265,6 +300,64 @@ export function validateMultiElectronHFState(s: MultiElectronHFState): Validatio
   return validationFromIssues(issues);
 }
 
+export function validateLSTermCIState(s: LSTermCIState): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  if (!Number.isInteger(s.N) || s.N < 2) {
+    issues.push({
+      severity: "error",
+      code: "LS_INVALID_N",
+      field: "N",
+      message: `LS-Coupled CI requires N >= 2 electrons (got ${s.N}).`,
+    });
+  }
+  const cfgVal = validateConfigurationSpec(s.referenceConfiguration, s.N);
+  issues.push(...cfgVal.issues);
+
+  if (!Number.isInteger(s.targetL) || s.targetL < 0) {
+    issues.push({
+      severity: "error",
+      code: "LS_INVALID_TARGET_L",
+      field: "targetL",
+      message: `Target orbital angular momentum L must be a non-negative integer (got ${s.targetL}).`,
+    });
+  }
+  if (!Number.isInteger(s.targetSpin2S) || s.targetSpin2S < 0 || s.targetSpin2S > s.N || (s.N - s.targetSpin2S) % 2 !== 0) {
+    issues.push({
+      severity: "error",
+      code: "LS_INVALID_TARGET_SPIN",
+      field: "targetSpin2S",
+      message: `Target 2S=${s.targetSpin2S} is incompatible with N=${s.N} electrons.`,
+    });
+  }
+  if (s.targetParity !== "even" && s.targetParity !== "odd") {
+    issues.push({
+      severity: "error",
+      code: "LS_INVALID_PARITY",
+      field: "targetParity",
+      message: `Target parity must be "even" or "odd" (got "${String(s.targetParity)}").`,
+    });
+  } else if (s.activeSpaceMode === "single-config" && cfgVal.valid) {
+    const refParity = computeConfigurationParity(s.referenceConfiguration).parity;
+    if (refParity !== s.targetParity) {
+      issues.push({
+        severity: "error",
+        code: "LS_PARITY_MISMATCH",
+        field: "targetParity",
+        message: `Single-configuration LS-CI parity (${refParity}) does not match target parity (${s.targetParity}).`,
+      });
+    }
+  }
+  if (!Number.isInteger(s.nRoots) || s.nRoots < 1 || s.nRoots > 12) {
+    issues.push({
+      severity: "error",
+      code: "LS_INVALID_NROOTS",
+      field: "nRoots",
+      message: `Requested nRoots must be between 1 and 12 (got ${s.nRoots}).`,
+    });
+  }
+  return validationFromIssues(issues);
+}
+
 export function validateQuantumState(s: QuantumState): ValidationResult {
   switch (s.kind) {
     case "nonrelativistic":
@@ -281,6 +374,8 @@ export function validateQuantumState(s: QuantumState): ValidationResult {
       );
     case "multi-electron-hf":
       return validateMultiElectronHFState(s);
+    case "ls-term-ci":
+      return validateLSTermCIState(s);
   }
 }
 
@@ -309,6 +404,11 @@ export function formatQuantumStateLabel(s: QuantumState): string {
     case "multi-electron-hf": {
       const cfg = formatSubshellConfiguration(s.subshellOccupations);
       return `${s.method.toUpperCase()}/${s.basis} (${cfg || `N=${s.N}`}, 2S=${s.spin2S})`;
+    }
+    case "ls-term-ci": {
+      const cfg = formatConfigurationSpec(s.referenceConfiguration);
+      const term = formatTermSymbol(s.targetSpin2S, s.targetL, s.targetParity);
+      return `LS-CI ${term} / ${s.basis} (${cfg || `N=${s.N}`}, ${s.activeSpaceMode})`;
     }
   }
 }
