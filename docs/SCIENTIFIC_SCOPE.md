@@ -6,8 +6,9 @@
 
 1. **Live Nonrelativistic Multi-Electron Hartree–Fock (`pyscf-hf-live`, `v0.7.0`)**:
    - Fixed clamped point-infinite-mass non-relativistic $N$-electron Hamiltonian ($\sum_i (-\frac{1}{2}\nabla_i^2 - Z/r_i) + \sum_{i<j} r_{ij}^{-1}$).
-   - Independent formalisms: `RHF` (strictly `2S=0`), `UHF` (spin-resolved $\alpha/\beta$, $\rho_s$, $\langle S^2 \rangle$), `ROHF` (Roothaan effective Fock + explicit Koopmans $\langle F^\alpha \rangle, \langle F^\beta \rangle$), and `AtomSphAverageRHF` (spherical fractional configuration average).
-   - Explicit neutral/ionic configurations (`Curated NIST Ground`, `Aufbau + Hund`, `User Custom`), verified all-electron `BSE v1` basis coverage (`STO-3G` `1..54`, `6-31G`/`def2-SVP`/`def2-TZVP` `1..36`, `cc-pVDZ`/`cc-pVTZ` `1..36 \ {19}`, `aug-cc-pVTZ` `1..36 \ {19,20}`), `110`-point Lebedev radial total/spin integration, and genuine 3D GTO spatial orbital/density grids (`mo-signed`, `mo-density`, `total-density`, `spin-density`).
+   - Distinct computational modes: `RHF` (`closed-shell-determinant`, `2S=0`), `UHF` (`unrestricted-determinant`, reports `<S²>`), `ROHF` (`restricted-open-shell-determinant`, spin-pure `<S²>=S(S+1)` + Koopmans `<Fα>/<Fβ>`), and `AtomSphAverageRHF` (`spherical-ensemble-average`, spin-unpolarized $N \ge 2$ with explicit `atomic_configuration` override for ions and curated shells, `<S²>` unavailable/`null`).
+   - Explicit neutral/ionic configurations (`Curated NIST Ground`, `Aufbau + Hund`, `User Custom`), verified all-electron `BSE v1` basis coverage (`STO-3G` `1..54`, `6-31G`/`def2-SVP`/`def2-TZVP` `1..36`, `cc-pVDZ`/`cc-pVTZ` `1..36 \ {19}`, `aug-cc-pVTZ` `1..36 \ {19,20}`), `110`-point Lebedev angular isotropy & radial integration, and genuine 3D GTO spatial orbital/density grids (`mo-signed`, `mo-density`, `total-density`, `spin-density`).
+   - **Full Local Scientific Mode vs. Static/Viewer Mode**: Express 5 (`127.0.0.1` default, `--host` overridable, strict Host/Origin `403` guard) bridges `/api/hf/*` to local Python PySCF; standalone static HTML reports `backend offline` honestly and disables live HF execution.
 2. **Exact Nonrelativistic One-Electron Hydrogenic Solvers (`schrodinger-coulomb`)**:
    - Point-nucleus Coulomb Hamiltonian with `point-infinite-mass` and isotope bare-nuclear `point-finite-mass` reduced-mass scaling ($N = 1$, $1 \le Z \le 118$), nodes, analytic $\langle r^k \rangle$, superpositions, and probability current $\mathbf{j}$.
 3. **Exact Relativistic 4-Component Dirac–Coulomb Solvers (`dirac-coulomb`)**:
@@ -16,13 +17,14 @@
    - NR and Dirac length-gauge E1 selection rules, polarization channels, oscillator strengths, Einstein $A$, and discrete vacuum series compared against NIST $^1\text{H}$ (zero broadening).
 5. **All-Electron Relativistic Total Spherical Electron Densities (`Z = 1..118`) & Bundled Snapshots**:
    - Lobato et al. (2026) Dirac–Padé total spherical density parameterization (`< 2e-7` norm error) and `v0.5` `aug-cc-pVTZ` total density exports, alongside qualitative Slater subshells (`Model B`).
-6. **Pinned Atomic Reference Metadata (`Z = 1..118`)**:
-   - NIST ASD (`Z = 1..108`, `Z = 109..118` `unavailable`), CIAAW 2021 atomic weights, Cordero 2008 covalent radii (`Z ≤ 96`), and pinned HF limits (`compas/sphf`, Koga–Thakkar 1999).
+6. **Pinned & Directly Executed Reference Benchmarks**:
+   - NIST ASD (`Z = 1..108`, `Z = 109..118` `unavailable`), CIAAW 2021 atomic weights, Cordero 2008 covalent radii (`Z ≤ 96`), and directly built/executed `compas/sphf` (`commit 913991f`, MIT) B-spline HF + Koga–Thakkar (1999) limits.
 
 ## Explicitly Out of Scope (Not Implemented in `v0.7.0`)
 
 ATOMS does **not** implement or fabricate:
-- Electron correlation methods (`MP2`, `CCSD`, `CISD`, `MCHF` — planned `v0.7.1`) or Effective Core Potentials (`def2-*` for `Z >= 37` is excluded rather than miscalculated without ECPs).
-- Multi-electron relativistic Dirac–Fock / MCDHF / RCI (`v0.8.0`/`v0.8.1`; `GRASP2018` and `Datatoms` remain registered `unavailable`).
+- **Term-resolved multi-electron coupling ($^{2S+1}L$), total $J$, or 2-particle $\langle \hat{L}^2 \rangle$** (`termResolution.supported = false`, `termSymbol = null`, `totalJ = null`, `lSquaredAvailable = false`).
+- Electron correlation methods (`MP2`, `UMP2`, `CISD`, `FCI`, `CCSD`, `MCHF` — later milestones) or Effective Core Potentials (`def2-*` for `Z >= 37` is excluded).
+- Multi-electron relativistic Dirac–Fock / MCDHF / RCI (`GRASP2018` and `Datatoms` remain registered `unavailable`).
 - Finite-nucleus numerical radial solvers (`finite-uniform` and `finite-fermi` remain `unsupported solver`).
-- Multi-electron optical spectra (`A_fi` transitions cover $N = 1$ only), higher-order QED Lamb shift, Breit interaction, hyperfine splitting, Stark/Zeeman external fields, or collisional-radiative plasma modeling.
+- Multi-electron optical spectra (`A_fi` transitions cover $N = 1$ only), QED Lamb shift, Breit interaction, hyperfine splitting, Stark/Zeeman external fields, or plasma/collision physics.

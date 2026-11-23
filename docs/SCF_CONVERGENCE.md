@@ -37,8 +37,9 @@ Multi-electron Hartree–Fock is a nonlinear self-consistent eigenvalue problem 
 
 ## 3. Troubleshooting Open-Shell SCF Convergence
 
-- Transition metals (e.g., `Cr` `[Ar] 3d5 4s1`) or near-degenerate anions can require:
+- Transition metals (e.g., `Cr` `[Ar] 3d5 4s1`) or near-degenerate open $d$ shells can require:
   - Switching `diis` to **`ediis`** or **`adiis`**,
   - Applying **`levelShift = 0.2 – 0.5 Ha`** and/or **`damp = 0.2 – 0.4`**,
-  - Trying **`initGuess = "atom"`** or increasing **`maxCycle = 150`**,
+  - Testing explicit `initGuess` (`minao`, `1e`, `atom`) — verified in `C`, `N`, and `Cr` ROHF to converge to identical energies (`< 1e-10 Ha` spread) and subshell degeneracies (`< 4e-14 Ha` split),
   - Explicitly checking `subshells` spin occupations (`2S`) in `HartreeFockWorkspace` rather than relying blindly on Aufbau defaults.
+- **Magnetic-Sublevel (`m_l`) Sensitivity on Open $d$ Shells**: For open-shell `SO(3)` real-harmonic determinants (e.g., `V 3d3 4s2`), different real $d$ sublevel occupation choices produce physically distinct determinant energies (default `[d0, d+1, d-1]` converges at `-942.832679 Ha` vs `t2g [d-2, d-1, d+1]` at `-942.883837 Ha` in `aug-cc-pVTZ`, within `0.50 mHa` of `compas/sphf 4F`), whereas `C1` without angular restrictions can mix $s/d$ symmetry below the pure $4F$ limit. Because ATOMS configures real-orbital subshells rather than multi-determinant $LS$ eigenstates, `stateInfo.termResolution` remains explicitly unavailable.

@@ -252,7 +252,7 @@ export function validateSuperpositionState(s: SuperpositionState): ValidationRes
 
 export function validateMultiElectronHFState(s: MultiElectronHFState): ValidationResult {
   const occVal = validateSubshellOccupations(s.N, s.spin2S, s.subshellOccupations);
-  const methodVal = validateMethodForSpin(s.method, s.spin2S);
+  const methodVal = validateMethodForSpin(s.method, s.spin2S, s.N);
   const issues = [...occVal.issues, ...methodVal.issues];
   if (s.scfOptions?.maxCycle !== undefined && (s.scfOptions.maxCycle < 1 || s.scfOptions.maxCycle > 300)) {
     issues.push({

@@ -20,19 +20,20 @@ $$\hat{H} = \sum_{i=1}^{N}\left(-\frac{1}{2}\nabla_i^2 - \frac{Z}{r_i}\right) + 
 
 Each formalism is exposed, validated, and labelled separately in both `pyscfLiveProvider` (`src/physics/providers/hartreeFock/index.ts`) and `HartreeFockWorkspace.tsx`:
 
-| Method ID | PySCF Solver | Spin Restriction | Density Matrix Convention | Validated Domain & Caveats |
+| Method ID | PySCF Solver | State Character (`stateInfo.stateCharacter`) | Spin & Angular-Momentum Diagnostics | Validated Domain & Caveats |
 |---|---|---|---|---|
-| `rhf` | `scf.RHF` | **Closed-shell singlet strictly (`2S = 0`)**; disabled if `2S !== 0` | Spin-summed $P_{\mu\nu} = 2\sum_{i\in\text{occ}} C_{\mu i} C_{\nu i}$ | Exact variational restricted single determinant for singlet ground/closed-shell ions ($\text{He}, \text{Be}, \text{Ne}, \text{Li}^+$). |
-| `uhf` | `scf.UHF` | Unrestricted ($\psi_i^\alpha \ne \psi_i^\beta$) | Separate $P^\alpha_{\mu\nu}, P^\beta_{\mu\nu}$, total $P = P^\alpha + P^\beta$, spin $P_s = P^\alpha - P^\beta$ | Supports open-shell atoms, cations, anions, and `H` ($N=1$). Exposes $\langle S^2 \rangle$, $S(S+1)$, and spin contamination $\Delta = \langle S^2 \rangle - S(S+1)$. |
-| `rohf` | `scf.ROHF` | Spin-restricted shared spatial MOs (`N_alpha >= N_beta`) | $P = P^\alpha + P^\beta$, exact spin eigenfunction ($\langle S^2 \rangle = S(S+1)$) | Uses PySCF's Roothaan effective closed/open Fock operator (`Fc = 0.5*(Fa+Fb)` on closed-closed/virtual blocks). Individual `<i|Fa|i>` and `<i|Fb|i>` Koopmans diagonals are returned alongside effective `energy_Ha`! |
-| `atom-sph-avg` | `pyscf.scf.atom_hf.AtomSphAverageRHF` | Fractional spherically averaged atomic RHF | Spin-averaged over degenerate $(2l+1)$ angular momentum shells (runs in `C1`, zero spin density) | Produces true spherically symmetric reference densities (`S(S+1)` unpolarized), distinct from term-specific UHF/ROHF. |
+| `rhf` | `scf.RHF` | `closed-shell-determinant` | Spin-pure (`<S^2> = 0`), closed-shell determinant; `<L^2>` unavailable (`null`). | Strict closed-shell singlet (`2S = 0`); disabled if `2S !== 0`. |
+| `uhf` | `scf.UHF` | `unrestricted-determinant` | Reports `<S^2>`, `S(S+1)`, and spin contamination `<S^2> - S(S+1)`; `<L^2>` unavailable (`null`). | Allows $\psi_i^\alpha \ne \psi_i^\beta$; may break spatial or spin symmetry on open shells. |
+| `rohf` | `scf.ROHF` | `restricted-open-shell-determinant` | Spin-pure (`<S^2> = S(S+1)`), shared spatial MOs; `<L^2>` unavailable (`null`). | Single real-orbital determinant under PySCF `SO3`; **not automatically an $L^2$ eigenstate or term-resolved $^{2S+1}L$ state**. Returns both effective eigenvalues and Koopmans diagonals `<i|Fa|i>`, `<i|Fb|i>`. |
+| `atom-sph-avg` | `pyscf.scf.atom_hf.AtomSphAverageRHF` | `spherical-ensemble-average` | **`spinDiagnostics.available = false`** (`sSquared = null`, `multiplicity = null`); 110-pt Lebedev isotropy `~2e-15`; `<L^2>` unavailable (`null`). | Spin-unpolarized ($N_\alpha = N_\beta$) fractional shell ensemble for $N \ge 2$ in `C1`. ATOMS explicitly sets `mf.atomic_configuration` for ions (`C+`) and curated ground atoms (`Cr 3d5 4s1`). Distinct from term-resolved HF. |
+| *(unavailable)* | — | *(not implemented in `v0.7.0`)* | `termResolution.supported = false`, `termSymbol = null`, `totalJ = null` | Multi-determinant $LS$ term coupling ($^{2S+1}L$) and relativistic $J$ coupling are explicitly unavailable and never fabricated from $(Z, N, 2S)$ or 1e densities. |
 
 > **Important Distinction on `ROHF` Orbital Energies (`Li`, `C`, `N`, etc.):**
-> In PySCF `ROHF`, the effective Roothaan Fock eigenvalues (`mo_energy`) govern orbital optimization and satisfy closed-shell Koopmans closely (`Li 1s: -2.477798 Ha` vs `compas/sphf -2.477751 Ha`), while for singly occupied open-shell orbitals the physical ionization-potential / Koopmans orbital expectation is the $\alpha$-Fock diagonal $\langle i | \hat{F}^\alpha | i \rangle$ (`Li 2s <Fa> = -0.196313 Ha` vs `compas/sphf -0.196323 Ha`). ATOMS returns and displays **both** `energy_Ha` and `fockAlpha_Ha` / `fockBeta_Ha` cleanly.
+> In PySCF `ROHF`, the effective Roothaan Fock eigenvalues (`mo_energy`) govern orbital optimization (`Li 1s: -2.477798 Ha` vs `compas/sphf -2.477751 Ha`), while for singly occupied open-shell orbitals the physical ionization-potential / Koopmans orbital expectation is the $\alpha$-Fock diagonal $\langle i | \hat{F}^\alpha | i \rangle$ (`Li 2s <Fa> = -0.196313 Ha` vs `compas/sphf -0.196323 Ha`). ATOMS returns and displays **both** `energy_Ha` and `fockAlpha_Ha` / `fockBeta_Ha` cleanly.
 
 ---
 
-## 3. Atomic Occupations & Symmetry Mapping
+## 3. Atomic Occupations, `SO(3)` Caveats, and Angular Diagnostics
 
 Users choose among three explicit occupation sources (`occupationMode`), never silently overridden:
 
@@ -40,28 +41,25 @@ Users choose among three explicit occupation sources (`occupationMode`), never s
 2. **`aufbau`**: Standard Madelung Aufbau + Hund rule ordering for arbitrary neutral or ionic electron counts $N$.
 3. **`custom`**: Direct user editing of per-subshell $(\alpha, \beta)$ counts up to subshell degeneracy $(2l+1)$ per spin.
 
-When `useSymmetry = true` (`RHF`/`UHF`/`ROHF`), `science/hf_backend.py` builds a `gto.Mole(symmetry="SO3")` and converts explicit subshell $(n, l, \alpha, \beta)$ counts into PySCF `SO(3)` irrep strings (`s+0`, `p-1`, `p+0`, `p+1`, `d-2`..`d+2`, `f-3`..`f+3`) with explicit integer totals `{irrep: alpha+beta}` for `RHF` or `(alpha, beta)` tuples for `UHF`/`ROHF`.
+When `useSymmetry = true` (`RHF`/`UHF`/`ROHF`), `science/hf_backend.py` builds a `gto.Mole(symmetry="SO3")` and converts explicit subshell $(n, l, \alpha, \beta)$ counts into PySCF real-harmonic `SO(3)` irrep strings (`s+0`, `p-1`, `p+0`, `p+1`, `d-2`..`d+2`, `f-3`..`f+3`).
+- `equallyOccupiedSubshellSplitMax_Ha`: measures splitting within equally occupied degenerate sublevels (`< 1.5e-14 Ha` in `C, N, Cr`).
+- `angularDiagnostics` (110-pt Lebedev quadrature): separates genuinely isotropic systems (`atom-sph-avg` ~`2e-15`, half-filled `Li, N, Cr` ~`1e-13..1e-15`) from oriented open-shell determinants (`B, C, O, F` relative anisotropy `0.50..1.72`).
 
 ---
 
-## 4. Runtime Architecture, Security, Cancellation, and Offline Behavior
+## 4. Execution Modes, Runtime Architecture, Security, & Lifecycle
 
 ```text
-Browser UI (HartreeFockWorkspace)
-   │  probe / capabilities -> main thread GET /api/hf/capabilities
+Full Local Scientific Mode:
+Browser UI (HartreeFockWorkspace) -> GET /api/hf/capabilities
    ▼
-ExperimentRunner ──► experiment.worker.ts (Web Worker, blob: origin safe)
-   │  AbortSignal + runSequence stale-result guard
+ExperimentRunner -> experiment.worker.ts (AbortSignal + stale guard)
    ▼
-createHttpHFTransport() ──► POST /api/hf/calculate (Express 5 server.ts, localhost)
-   │  180s timeout + client disconnect / AbortSignal kills child via SIGTERM -> SIGKILL
-   ▼
-/opt/atoms-py/bin/python science/hf_backend.py (PySCF 2.15.1 + libcint + BSE 0.12)
+createHttpHFTransport() -> POST /api/hf/calculate (Express 5 server.ts, 127.0.0.1 default)
+   ▼  (90s timeout + Host/Origin 403 guard + SIGTERM->SIGKILL child cleanup)
+.venv/bin/python science/hf_backend.py (PySCF 2.15.1 + libcint + BSE 0.12)
 ```
 
-### Key Operational Safeguards
-- **Localhost-Only / No Cloud Dependency**: Calculation executes strictly inside the user's local Node + Python runtime (`/opt/atoms-py/bin/python` or `ATOMS_PYTHON` env var). Zero data leaves localhost.
-- **Input Bounding (`server.ts`)**: Request JSON body limited to `256kb`; `Z`, `N`, `method`, `basis`, `convTol`, `maxCycle` validated before spawning Python.
-- **Blob-Worker Origin Fix (`src/physics/hf/transport.ts`)**: Resolves `blob:http(s)://...` Worker origins back to the HTTP host origin so `ExperimentWorkerClient` executes PySCF calculations cleanly inside Vite single-file inline Workers (`?worker&inline`).
-- **Real Cancellation**: Calling `cancelExecution(executionId)` triggers the browser `AbortController`, closes the HTTP socket, and causes `server.ts` (`req.on("aborted")` / `res.on("close")` while `!res.writableFinished`) to send `SIGTERM` immediately to the Python worker process.
-- **Offline Integrity**: When `/api/hf/capabilities` returns HTTP 503 or non-JSON (static bundle without Express server), ATOMS disables HF submission cleanly and displays *"Live Multi-Electron Solver Unavailable — ATOMS never fabricates or simulates HF results offline."*
+- **Full Local Scientific Mode**: Bound to **`127.0.0.1` by default** (override via `--host` / `ATOMS_HOST` for managed containers). Cross-origin `/api/hf/*` requests are rejected with HTTP `403 FORBIDDEN_ORIGIN` (no wildcard CORS). `SIGINT`/`SIGTERM` cleanly reaps all spawned Python children, closes Vite, and shuts down the HTTP server; `EADDRINUSE` reports socket/owner diagnostics without killing unrelated processes.
+- **Static / Viewer Mode**: Serving `dist/index.html` without Express/Python causes `/api/hf/capabilities` to return non-JSON (`text/html`) or connection failure; the UI enters **backend offline** state and disables live HF runs cleanly rather than fabricating calculations.
+- **Input & Abort Safeguards**: Request JSON limited to `1mb`; `Z, N, method, basis, convTol, maxCycle` validated; client abort triggers immediate `SIGTERM -> SIGKILL` termination of the Python subprocess.

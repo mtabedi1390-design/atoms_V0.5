@@ -2,6 +2,6 @@
 # Installed optionally into a local virtualenv via scripts/setup_python_backend.sh.
 pyscf==2.15.1
 basis-set-exchange==0.12
-numpy>=1.26.0
-scipy>=1.11.0
-h5py>=3.10.0
+numpy==2.4.6
+scipy==1.17.1
+h5py==3.16.0

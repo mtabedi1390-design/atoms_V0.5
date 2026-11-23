@@ -11,23 +11,28 @@
 
 ---
 
-## 2. Python Backend & Build Commands
+## 2. Execution Modes, Python Backend & Build Commands
+
+- **Full Local Scientific Mode (`tsx server.ts` / `node server.ts`)**: Express 5 binds to **`127.0.0.1` by default** (use `--host 0.0.0.0` or `ATOMS_HOST=0.0.0.0` only for managed container previews), validates Host/Origin headers on `/api/hf/*` (`403 FORBIDDEN_ORIGIN` on cross-origin requests), invokes `.venv/bin/python science/hf_backend.py`, reports `EADDRINUSE` owning socket details without killing unrelated processes, and cleans up child processes + Vite cleanly on `SIGINT`/`SIGTERM`.
+- **Static / Viewer Mode (`vite preview` or standalone `dist/index.html`)**: Serves UI/1-e/dataset views only; `/api/hf/capabilities` returns non-JSON or unavailable status and live HF submission stays disabled cleanly.
+
+Verified on Linux (`x86_64`, Node `22.23.2`, Python `3.11.2`):
 
 ```bash
-# Install isolated Python PySCF + Basis Set Exchange environment into .venv/
+# Verify Node (>=20), Python (>=3.10), Express, create .venv/, install pinned deps, & run He smoke test
 bash scripts/setup_python_backend.sh
 
 npm ci                  # Install Node dependencies cleanly
-npm run dev             # Full-stack Express 5 + Vite middleware + PySCF API on port 3000
+npm run dev             # Express 5 + Vite middleware + PySCF API on http://127.0.0.1:3000
 npm run data:build      # Verify SHA-256 hashes & build NIST/Lobato JSON tables
 npm run data:matrix     # Regenerate docs/ACCURACY_MATRIX.md
 npm run typecheck       # Strict TypeScript compiler check (tsc --noEmit)
 npm run lint            # TypeScript syntax/type validation
 npm run test:native     # Compile Debug & Release C++17 native core (340 checks each)
-npm test                # Run full Vitest suite (17 files, 133 tests, incl. PySCF + C++ parity)
+npm test                # Run full Vitest suite (incl. live PySCF & C++ parity)
 npm run build           # Production Vite singlefile + inline Worker build (dist/index.html)
-npm start               # Production Express server serving dist/ + /api/hf/* on port 3000
-npm run test:browser    # Run Playwright full-stack Chromium + WebGL2 + PySCF tests (23 tests)
+npm start               # Production Express server serving dist/ + /api/hf/* on http://127.0.0.1:3000
+npm run test:browser    # Run Playwright full-stack Chromium + WebGL2 + PySCF tests
 ```
 
 ---

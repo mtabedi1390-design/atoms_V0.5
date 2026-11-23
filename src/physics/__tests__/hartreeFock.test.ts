@@ -143,6 +143,21 @@ describe("Electronic configurations, spin validation, and BSE basis coverage (Ph
     expect(cr3dCur).toEqual({ n: 3, l: 2, alpha: 5, beta: 0 });
   });
 
+  it("rejects atom-sph-avg for 1-electron systems at the domain validation boundary", () => {
+    const hCfg = proposeDefaultConfiguration(1, 1);
+    expect(() =>
+      createMultiElectronHFState({
+        N: 1,
+        method: "atom-sph-avg",
+        basis: "cc-pvdz",
+        occupationMode: "curated-ground",
+        spin2S: 1,
+        subshellOccupations: hCfg.subshells,
+        useSymmetry: false,
+      }),
+    ).toThrow(/ATOM_SPH_AVG_REQUIRES_MULTI_ELECTRON/i);
+  });
+
   it("enforces exact BSE element gaps and all-electron ECP caps", () => {
     expect(isBasisSupportedForZ("cc-pvdz", 19).supported).toBe(false); // K omitted in cc-pVDZ
     expect(isBasisSupportedForZ("aug-cc-pvtz", 20).supported).toBe(false); // Ca omitted in aug-cc-pVTZ
@@ -250,36 +265,95 @@ describe.skipIf(!PYTHON_EXE)("Live PySCF + libcint + BSE Scientific Validation (
     expect(neAugTz.data.radialProfiles!.integratedElectrons).toBeCloseTo(10.0, 3);
   });
 
-  it("verifies open-shell Li, C, N, F across UHF, ROHF (Koopmans diagonals), and AtomSphAverageRHF", async () => {
-    // Li ROHF vs compas/sphf numerical HF limit (-7.432726930728, 1s=-2.477751, 2s=-0.196323 Ha)
+  it("verifies open-shell Li, B, C, N, O, F, Cr matrix, state taxonomy, isotropy, SO(3) degeneracy, and SPHF matching", async () => {
+    // Li ROHF vs directly executed compas/sphf numerical HF limit (-7.432726930728 Ha)
     const liRohf = await runHF(3, 3, 1, "rohf", "aug-cc-pvtz");
     const liRef = lookupHFBenchmark(3, 3, 1)!;
     expect(Math.abs(liRohf.data.energy!.eTotal_Ha - liRef.hfLimit_Ha)).toBeLessThan(1e-3);
     const li1s = liRohf.data.orbitals!.find((o) => o.index === 0)!;
     const li2s = liRohf.data.orbitals!.find((o) => o.index === 1)!;
-    // Closed-shell 1s matches Roothaan Fc=(Fa+Fb)/2 eigenvalue; singly-occupied 2s matches <i|Fa|i>
     expect(Math.abs(li1s.energy_Ha - (-2.477751))).toBeLessThan(1e-4);
     expect(Math.abs(li2s.fockAlpha_Ha! - (-0.196323))).toBeLessThan(1e-4);
+    expect(liRohf.data.angularDiagnostics!.isSphericallySymmetric).toBe(true);
+    expect(liRohf.data.angularDiagnostics!.maxRelativeAnisotropy).toBeLessThan(1e-10);
 
-    // Carbon 3P (Z=6, N=6, 2S=2): UHF < ROHF << AtomSphAverageRHF
-    const cUhf = await runHF(6, 6, 2, "uhf", "cc-pvdz");
-    const cRohf = await runHF(6, 6, 2, "rohf", "cc-pvdz");
-    const cSph = await runHF(6, 6, 2, "atom-sph-avg", "cc-pvdz");
-    expect(cUhf.data.energy!.eTotal_Ha).toBeLessThan(cRohf.data.energy!.eTotal_Ha);
-    expect(cRohf.data.energy!.eTotal_Ha).toBeLessThan(cSph.data.energy!.eTotal_Ha);
-    expect(cUhf.data.radialProfiles!.integratedElectrons).toBeCloseTo(6.0, 3);
-    expect(cUhf.data.radialProfiles!.integratedSpin).toBeCloseTo(2.0, 3);
-    expect(cSph.data.radialProfiles!.integratedElectrons).toBeCloseTo(6.0, 3);
+    // Open-shell validation matrix across s, p, d open shells: Li, B, C, N, O, F, Cr
+    const openShellMatrix = [
+      { Z: 5, spin2S: 1, basis: "cc-pvtz" as const, halfFilledOrClosed: false },
+      { Z: 6, spin2S: 2, basis: "cc-pvtz" as const, halfFilledOrClosed: false },
+      { Z: 7, spin2S: 3, basis: "cc-pvtz" as const, halfFilledOrClosed: true },
+      { Z: 8, spin2S: 2, basis: "cc-pvtz" as const, halfFilledOrClosed: false },
+      { Z: 9, spin2S: 1, basis: "cc-pvtz" as const, halfFilledOrClosed: false },
+      { Z: 24, spin2S: 6, basis: "def2-tzvp" as const, halfFilledOrClosed: true },
+    ];
 
-    // Chromium curated 3d5 4s1 (2S=6) vs Aufbau 3d4 4s2 (2S=4) gives distinct converged electronic states
-    const crGround = await runHF(24, 24, 6, "uhf", "def2-svp", {
+    for (const row of openShellMatrix) {
+      const rohf = await runHF(row.Z, row.Z, row.spin2S, "rohf", row.basis);
+      const uhf = await runHF(row.Z, row.Z, row.spin2S, "uhf", row.basis);
+      const sph = await runHF(row.Z, row.Z, row.spin2S, "atom-sph-avg", row.basis);
+
+      // Distinct state character and honest unavailability of term / J / <L^2>
+      expect(rohf.data.stateInfo!.stateCharacter).toBe("restricted-open-shell-determinant");
+      expect(uhf.data.stateInfo!.stateCharacter).toBe("unrestricted-determinant");
+      expect(sph.data.stateInfo!.stateCharacter).toBe("spherical-ensemble-average");
+      for (const r of [rohf, uhf, sph]) {
+        expect(r.data.stateInfo!.termResolution.supported).toBe(false);
+        expect(r.data.stateInfo!.termResolution.termSymbol).toBeNull();
+        expect(r.data.stateInfo!.termResolution.totalJ).toBeNull();
+        expect(r.data.stateInfo!.termResolution.lSquaredAvailable).toBe(false);
+        expect(r.data.angularDiagnostics!.lSquaredAvailable).toBe(false);
+        expect(r.data.energy!.tracePS).toBeCloseTo(row.Z, 6);
+      }
+
+      // Variational energy ordering: E(UHF) <= E(ROHF) < E(spin-unpolarized AtomSphAverageRHF)
+      expect(uhf.data.energy!.eTotal_Ha).toBeLessThanOrEqual(rohf.data.energy!.eTotal_Ha + 1e-8);
+      expect(rohf.data.energy!.eTotal_Ha).toBeLessThan(sph.data.energy!.eTotal_Ha);
+
+      // Spin diagnostics: pure S(S+1) for ROHF, >= S(S+1) for UHF, explicitly unavailable for AtomSphAverageRHF
+      const exactS2 = (row.spin2S / 2) * (row.spin2S / 2 + 1);
+      expect(rohf.data.spinDiagnostics!.available).toBe(true);
+      expect(rohf.data.spinDiagnostics!.sSquared).toBeCloseTo(exactS2, 10);
+      expect(uhf.data.spinDiagnostics!.available).toBe(true);
+      expect(uhf.data.spinDiagnostics!.sSquared!).toBeGreaterThanOrEqual(exactS2 - 1e-9);
+      expect(sph.data.spinDiagnostics!.available).toBe(false);
+      expect(sph.data.spinDiagnostics!.sSquared).toBeNull();
+      expect(sph.data.spinDiagnostics!.multiplicity).toBeNull();
+
+      // 110-pt Lebedev isotropy: AtomSphAverageRHF MUST be spherically isotropic (<1e-10);
+      // half-filled shells (N, Cr) are spherical, while oriented p^1/p^2/p^4/p^5 determinants are anisotropic.
+      expect(sph.data.angularDiagnostics!.quadraturePoints).toBe(110);
+      expect(sph.data.angularDiagnostics!.isSphericallySymmetric).toBe(true);
+      expect(sph.data.angularDiagnostics!.maxRelativeAnisotropy).toBeLessThan(1e-10);
+      if (row.halfFilledOrClosed) {
+        expect(rohf.data.angularDiagnostics!.isSphericallySymmetric).toBe(true);
+        expect(rohf.data.angularDiagnostics!.maxRelativeAnisotropy).toBeLessThan(1e-9);
+      } else {
+        expect(rohf.data.angularDiagnostics!.isSphericallySymmetric).toBe(false);
+        expect(rohf.data.angularDiagnostics!.maxRelativeAnisotropy).toBeGreaterThan(0.1);
+      }
+      if (rohf.data.angularDiagnostics!.equallyOccupiedSubshellSplitMax_Ha !== null) {
+        expect(rohf.data.angularDiagnostics!.equallyOccupiedSubshellSplitMax_Ha).toBeLessThan(1e-11);
+      }
+    }
+
+    // Ion C+ (Z=6, N=5) under AtomSphAverageRHF must respect custom atomic_configuration (tracePS = 5, not neutral 6)
+    const cPlusSph = await runHF(6, 5, 1, "atom-sph-avg", "cc-pvdz");
+    expect(cPlusSph.data.energy!.tracePS).toBeCloseTo(5.0, 7);
+    expect(cPlusSph.data.angularDiagnostics!.isSphericallySymmetric).toBe(true);
+
+    // Cr 7S (3d5 4s1) ROHF/aug-cc-pVTZ vs directly executed compas/sphf (-1043.356376285607 Ha)
+    const crAugTz = await runHF(24, 24, 6, "rohf", "aug-cc-pvtz", {
       subshells: proposeDefaultConfiguration(24, 24).subshells,
     });
+    const crRef = lookupHFBenchmark(24, 24, 6)!;
+    expect(crAugTz.data.energy!.eTotal_Ha).toBeGreaterThan(crRef.hfLimit_Ha);
+    expect(Math.abs(crAugTz.data.energy!.eTotal_Ha - crRef.hfLimit_Ha)).toBeLessThan(1.0e-3);
+
+    // Chromium curated 3d5 4s1 (2S=6) vs Aufbau 3d4 4s2 (2S=4) gives distinct converged electronic states
     const crAufbau = await runHF(24, 24, 4, "uhf", "def2-svp", {
       subshells: proposeAufbauConfiguration(24).subshells,
     });
-    expect(crGround.data.energy!.eTotal_Ha).toBeLessThan(crAufbau.data.energy!.eTotal_Ha);
-    expect(crGround.data.radialProfiles!.integratedSpin).toBeCloseTo(6.0, 2);
+    expect(crAugTz.data.energy!.eTotal_Ha).toBeLessThan(crAufbau.data.energy!.eTotal_Ha);
   });
 
   it("rejects unconverged SCF, invalid spin/RHF, finite nuclear models, and missing basis elements honestly", async () => {

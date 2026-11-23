@@ -69,10 +69,10 @@ const METHOD_CARDS: readonly {
   readonly label: string;
   readonly summary: string;
 }[] = [
-  { id: "rhf", label: "RHF", summary: "Closed-shell spin-restricted singlet (2S = 0 only)" },
-  { id: "uhf", label: "UHF", summary: "Unrestricted α/β spatial orbitals + spin density" },
-  { id: "rohf", label: "ROHF", summary: "Restricted open-shell Roothaan effective Fock" },
-  { id: "atom-sph-avg", label: "AtomSphAvg", summary: "PySCF AtomSphAverageRHF (spherical fractional avg)" },
+  { id: "rhf", label: "RHF (det)", summary: "Closed-shell spin-restricted singlet determinant (2S = 0 only)" },
+  { id: "uhf", label: "UHF (det)", summary: "Unrestricted α/β spatial determinant · reports <S²> contamination" },
+  { id: "rohf", label: "ROHF (det)", summary: "Restricted open-shell Roothaan determinant · spin-pure, not L²-pure" },
+  { id: "atom-sph-avg", label: "AtomSphAvg (ensemble)", summary: "PySCF AtomSphAverageRHF spin-unpolarized spherical ensemble (not LS term)" },
 ];
 
 export function HartreeFockWorkspace({
@@ -145,7 +145,7 @@ export function HartreeFockWorkspace({
     () => validateSubshellOccupations(N, spin2S, subshells),
     [N, spin2S, subshells],
   );
-  const methodValidation = useMemo(() => validateMethodForSpin(method, spin2S), [method, spin2S]);
+  const methodValidation = useMemo(() => validateMethodForSpin(method, spin2S, N), [method, spin2S, N]);
   const benchmark = useMemo(() => lookupHFBenchmark(Z, N, spin2S), [Z, N, spin2S]);
 
   const activeHFExec = useMemo(
@@ -443,7 +443,7 @@ export function HartreeFockWorkspace({
           </div>
           {benchmark && (
             <p className="mt-1.5 text-[10px] text-emerald-300/90">
-              Pinned independent benchmark available: {benchmark.speciesLabel} ({benchmark.term}) HF limit = {benchmark.hfLimit_Ha.toFixed(7)} Ha ({benchmark.source}).
+              External benchmark reference ({benchmark.speciesLabel}, target state {benchmark.referenceTerm}): HF limit = {benchmark.hfLimit_Ha.toFixed(7)} Ha ({benchmark.source}).
             </p>
           )}
         </Panel>
@@ -452,17 +452,25 @@ export function HartreeFockWorkspace({
           <div className="grid grid-cols-2 gap-1.5">
             {METHOD_CARDS.map((mc) => {
               const disabledRHF = mc.id === "rhf" && spin2S !== 0;
+              const disabledSphAvg = mc.id === "atom-sph-avg" && N < 2;
+              const disabled = disabledRHF || disabledSphAvg;
               const selected = method === mc.id;
               return (
                 <button
                   key={mc.id}
                   type="button"
                   data-testid={`hf-method-${mc.id}`}
-                  disabled={disabledRHF}
-                  title={disabledRHF ? "RHF requires closed-shell singlet (2S = 0)" : mc.summary}
+                  disabled={disabled}
+                  title={
+                    disabledRHF
+                      ? "RHF requires closed-shell singlet (2S = 0)"
+                      : disabledSphAvg
+                        ? "AtomSphAverageRHF requires N >= 2 electrons"
+                        : mc.summary
+                  }
                   onClick={() => setMethod(mc.id)}
                   className={`rounded-sm border p-1.5 text-left transition-colors ${
-                    disabledRHF
+                    disabled
                       ? "cursor-not-allowed border-zinc-800 bg-zinc-950 opacity-40"
                       : selected
                         ? "border-amber-400 bg-zinc-900"
@@ -472,11 +480,16 @@ export function HartreeFockWorkspace({
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs font-semibold text-zinc-100">{mc.label}</span>
                     {disabledRHF && <span className="text-[9px] text-red-300">2S≠0</span>}
+                    {disabledSphAvg && <span className="text-[9px] text-red-300">N&lt;2</span>}
                   </div>
                   <p className="text-[10px] text-zinc-400">{mc.summary}</p>
                 </button>
               );
             })}
+          </div>
+          <div className="mt-1.5 flex items-center justify-between rounded-sm border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[10px] text-zinc-400">
+            <span>Term-resolved LS multiplets (²ˢ⁺¹L) &amp; relativistic J</span>
+            <Badge kind="unavailable">not implemented in v0.7.0</Badge>
           </div>
           {!methodValidation.valid && (
             <p className="mt-1 text-[11px] text-red-400">
@@ -727,109 +740,147 @@ export function HartreeFockWorkspace({
                       ? `Converged (${hfPayload.scf.cycles}/${hfPayload.scf.maxCycle} cycles)`
                       : "SCF NOT CONVERGED"}
                   </Badge>
-                  <Badge kind={hfResultRecord?.source === "computed" ? "evaluated" : "estimate"}>
-                    source: {hfResultRecord?.source ?? "computed"}
-                  </Badge>
-                  <span className="font-mono text-[10px] text-zinc-400">
-                    sym={hfPayload.symmetryGroup} · N_AO={hfPayload.aoCount} · {hfPayload.basisSource}
-                  </span>
-                </div>
-                {hfPayload.volumeGrid && (
-                  <button
-                    type="button"
-                    data-testid="hf-view-3d-btn"
-                    onClick={() =>
-                      onProjectToWorkbench({
-                        title: `${hfPayload.system?.symbol} ${hfPayload.method?.toUpperCase()}/${hfPayload.basis}`,
-                        method: hfPayload.method!,
-                        basis: hfPayload.basis!,
-                        symbol: hfPayload.system?.symbol ?? "",
-                        grid: hfPayload.volumeGrid!,
-                      })
-                    }
-                    className="rounded-sm bg-sky-500 px-2.5 py-1 text-[11px] font-semibold text-black hover:bg-sky-400"
-                  >
-                    Visualize 3D Isosurface in Workbench
-                  </button>
-                )}
-              </div>
-
-              {hfPayload.rohfConvention && (
-                <p className="mb-2 rounded-sm border border-sky-900/60 bg-sky-950/20 px-2 py-1 text-[11px] text-sky-200">
-                  ROHF convention: {hfPayload.rohfConvention}
-                </p>
-              )}
-
-              <div data-testid="hf-energy-table" className="grid grid-cols-1 gap-x-6 gap-y-0.5 text-xs md:grid-cols-2">
-                <Row label="Total Energy E_HF">
-                  <span className="font-mono font-semibold text-amber-300">
-                    {hfPayload.energy.eTotal_Ha.toFixed(9)} Ha
-                  </span>
-                </Row>
-                <Row label="Total Energy (eV)">
-                  <span className="font-mono">{hfPayload.energy.eTotal_eV.toFixed(6)} eV</span>
-                </Row>
-                <Row label="Kinetic Energy T">
-                  <span className="font-mono">{hfPayload.energy.eKinetic_Ha.toFixed(8)} Ha</span>
-                </Row>
-                <Row label="Nuclear Attraction V_ne">
-                  <span className="font-mono">{hfPayload.energy.eNuclear_Ha.toFixed(8)} Ha</span>
-                </Row>
-                <Row label="Coulomb J (½ Tr P J)">
-                  <span className="font-mono">{hfPayload.energy.eCoulomb_Ha.toFixed(8)} Ha</span>
-                </Row>
-                <Row label="Exchange K (−½ Tr P K)">
-                  <span className="font-mono text-emerald-300">{hfPayload.energy.eExchange_Ha.toFixed(8)} Ha</span>
-                </Row>
-                <Row label="|E_tot − (T+V+J+K)|">
-                  <span className="font-mono">{hfPayload.energy.energyConsistencyError_Ha.toExponential(2)} Ha</span>
-                </Row>
-                <Row label="Virial ratio −V/T">
-                  <span className="font-mono">
-                    {hfPayload.energy.virialRatio !== null ? hfPayload.energy.virialRatio.toFixed(6) : "—"}
-                  </span>
-                </Row>
-                <Row label="Trace Tr(P S) / α / β">
-                  <span className="font-mono">
-                    {hfPayload.energy.tracePS.toFixed(6)} ({hfPayload.energy.traceAlpha.toFixed(3)} / {hfPayload.energy.traceBeta.toFixed(3)})
-                  </span>
-                </Row>
-                <Row label="max |Cᵀ S C − I| / κ(S)">
-                  <span className="font-mono">
-                    {(hfPayload.orthonormalityError ?? 0).toExponential(2)} / {hfPayload.energy.overlapConditionNumber.toExponential(2)}
-                  </span>
-                </Row>
-                {hfPayload.spinDiagnostics && (
-                  <Row label="<S²> vs S(S+1)">
-                    <span className="font-mono">
-                      {hfPayload.spinDiagnostics.sSquared.toFixed(6)} vs {hfPayload.spinDiagnostics.sSquaredExact.toFixed(6)} (Δ={hfPayload.spinDiagnostics.spinContamination.toExponential(2)})
-                    </span>
-                  </Row>
-                )}
-                {hfPayload.runtime && (
-                  <Row label="Runtime / Peak Mem">
-                    <span className="font-mono">
-                      {hfPayload.runtime.totalMs.toFixed(1)} ms (SCF {hfPayload.runtime.scfMs.toFixed(1)} ms) · {hfPayload.runtime.peakMemoryMB} MB
-                    </span>
-                  </Row>
-                )}
-              </div>
-
-              {resultBenchmark && (
-                <div className="mt-2 rounded-sm border border-emerald-900/60 bg-emerald-950/15 p-2 text-[11px] text-zinc-200">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-emerald-300">
-                      Independent Numerical Limit Reference ({resultBenchmark.source})
-                    </span>
-                    <span className="font-mono">
-                      E_limit = {resultBenchmark.hfLimit_Ha.toFixed(9)} Ha
+                    <Badge kind={hfResultRecord?.source === "computed" ? "evaluated" : "estimate"}>
+                      source: {hfResultRecord?.source ?? "computed"}
+                    </Badge>
+                    {hfPayload.stateInfo && (
+                      <Badge
+                        kind={hfPayload.stateInfo.stateCharacter === "spherical-ensemble-average" ? "estimate" : "evaluated"}
+                        data-testid="hf-state-character"
+                      >
+                        {hfPayload.stateInfo.stateCharacter}
+                      </Badge>
+                    )}
+                    <span className="font-mono text-[10px] text-zinc-400">
+                      sym={hfPayload.symmetryGroup} · N_AO={hfPayload.aoCount} · {hfPayload.basisSource}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-[10px] text-zinc-400">
-                    ΔE(basis − limit) = {(hfPayload.energy.eTotal_Ha - resultBenchmark.hfLimit_Ha).toFixed(7)} Ha ({((hfPayload.energy.eTotal_Ha - resultBenchmark.hfLimit_Ha) * 1000).toFixed(4)} mHa). Note: finite GTO basis error is positive for variational RHF/ROHF; UHF spin polarization can lie slightly below ROHF limits.
-                  </p>
+                  {hfPayload.volumeGrid && (
+                    <button
+                      type="button"
+                      data-testid="hf-view-3d-btn"
+                      onClick={() =>
+                        onProjectToWorkbench({
+                          title: `${hfPayload.system?.symbol} ${hfPayload.method?.toUpperCase()}/${hfPayload.basis}`,
+                          method: hfPayload.method!,
+                          basis: hfPayload.basis!,
+                          symbol: hfPayload.system?.symbol ?? "",
+                          grid: hfPayload.volumeGrid!,
+                        })
+                      }
+                      className="rounded-sm bg-sky-500 px-2.5 py-1 text-[11px] font-semibold text-black hover:bg-sky-400"
+                    >
+                      Visualize 3D Isosurface in Workbench
+                    </button>
+                  )}
                 </div>
-              )}
+
+                {hfPayload.stateInfo && (
+                  <div data-testid="hf-state-taxonomy" className="mb-2 rounded-sm border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 text-[11px] text-zinc-300">
+                    <div>
+                      <strong className="text-zinc-100">{hfPayload.stateInfo.ansatzLabel}</strong> ·{" "}
+                      <span className="font-mono text-[10px] text-amber-300">
+                        term={hfPayload.stateInfo.termResolution.termSymbol ?? "unavailable (not term-resolved)"} · J={hfPayload.stateInfo.termResolution.totalJ ?? "N/A"} · ⟨L²⟩=unavailable
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-zinc-400">{hfPayload.stateInfo.magneticSublevelNote}</p>
+                  </div>
+                )}
+
+                {hfPayload.rohfConvention && (
+                  <p className="mb-2 rounded-sm border border-sky-900/60 bg-sky-950/20 px-2 py-1 text-[11px] text-sky-200">
+                    ROHF convention: {hfPayload.rohfConvention}
+                  </p>
+                )}
+
+                <div data-testid="hf-energy-table" className="grid grid-cols-1 gap-x-6 gap-y-0.5 text-xs md:grid-cols-2">
+                  <Row label="Total Energy E_HF">
+                    <span className="font-mono font-semibold text-amber-300">
+                      {hfPayload.energy.eTotal_Ha.toFixed(9)} Ha
+                    </span>
+                  </Row>
+                  <Row label="Total Energy (eV)">
+                    <span className="font-mono">{hfPayload.energy.eTotal_eV.toFixed(6)} eV</span>
+                  </Row>
+                  <Row label="Kinetic Energy T">
+                    <span className="font-mono">{hfPayload.energy.eKinetic_Ha.toFixed(8)} Ha</span>
+                  </Row>
+                  <Row label="Nuclear Attraction V_ne">
+                    <span className="font-mono">{hfPayload.energy.eNuclear_Ha.toFixed(8)} Ha</span>
+                  </Row>
+                  <Row label="Coulomb J (½ Tr P J)">
+                    <span className="font-mono">{hfPayload.energy.eCoulomb_Ha.toFixed(8)} Ha</span>
+                  </Row>
+                  <Row label="Exchange K (−½ Tr P K)">
+                    <span className="font-mono text-emerald-300">{hfPayload.energy.eExchange_Ha.toFixed(8)} Ha</span>
+                  </Row>
+                  <Row label="|E_tot − (T+V+J+K)|">
+                    <span className="font-mono">{hfPayload.energy.energyConsistencyError_Ha.toExponential(2)} Ha</span>
+                  </Row>
+                  <Row label="Virial ratio −V/T">
+                    <span className="font-mono">
+                      {hfPayload.energy.virialRatio !== null ? hfPayload.energy.virialRatio.toFixed(6) : "—"}
+                    </span>
+                  </Row>
+                  <Row label="Trace Tr(P S) / α / β">
+                    <span className="font-mono">
+                      {hfPayload.energy.tracePS.toFixed(6)} ({hfPayload.energy.traceAlpha.toFixed(3)} / {hfPayload.energy.traceBeta.toFixed(3)})
+                    </span>
+                  </Row>
+                  <Row label="max |Cᵀ S C − I| / κ(S)">
+                    <span className="font-mono">
+                      {(hfPayload.orthonormalityError ?? 0).toExponential(2)} / {hfPayload.energy.overlapConditionNumber.toExponential(2)}
+                    </span>
+                  </Row>
+                  {hfPayload.spinDiagnostics && (
+                    <Row label="<S²> vs S(S+1)">
+                      {hfPayload.spinDiagnostics.available && hfPayload.spinDiagnostics.sSquared !== null ? (
+                        <span className="font-mono">
+                          {hfPayload.spinDiagnostics.sSquared.toFixed(6)} vs {hfPayload.spinDiagnostics.sSquaredExact!.toFixed(6)} (Δ={hfPayload.spinDiagnostics.spinContamination!.toExponential(2)})
+                        </span>
+                      ) : (
+                        <span className="font-mono text-zinc-400">
+                          unavailable ({hfPayload.method === "atom-sph-avg" ? "spin-unpolarized spherical ensemble" : "n/a"})
+                        </span>
+                      )}
+                    </Row>
+                  )}
+                  {hfPayload.angularDiagnostics && (
+                    <Row label="Angular Isotropy (110-pt)">
+                      <span className="font-mono">
+                        {hfPayload.angularDiagnostics.isSphericallySymmetric
+                          ? `spherical (max Δρ/ρ̄=${hfPayload.angularDiagnostics.maxRelativeAnisotropy.toExponential(2)})`
+                          : `anisotropic det (max Δρ/ρ̄=${hfPayload.angularDiagnostics.maxRelativeAnisotropy.toFixed(3)})`}
+                      </span>
+                    </Row>
+                  )}
+                  {hfPayload.runtime && (
+                    <Row label="Runtime / Peak Mem">
+                      <span className="font-mono">
+                        {hfPayload.runtime.totalMs.toFixed(1)} ms (SCF {hfPayload.runtime.scfMs.toFixed(1)} ms) · {hfPayload.runtime.peakMemoryMB} MB
+                      </span>
+                    </Row>
+                  )}
+                </div>
+
+                {resultBenchmark && (
+                  <div className="mt-2 rounded-sm border border-emerald-900/60 bg-emerald-950/15 p-2 text-[11px] text-zinc-200">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-emerald-300">
+                        External Numerical Limit Reference ({resultBenchmark.source}; {resultBenchmark.referenceTerm})
+                      </span>
+                      <span className="font-mono">
+                        E_limit = {resultBenchmark.hfLimit_Ha.toFixed(9)} Ha
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-zinc-400">
+                      ΔE(computed − ref) = {(hfPayload.energy.eTotal_Ha - resultBenchmark.hfLimit_Ha).toFixed(7)} Ha ({((hfPayload.energy.eTotal_Ha - resultBenchmark.hfLimit_Ha) * 1000).toFixed(4)} mHa).{" "}
+                      {hfPayload.method === "atom-sph-avg"
+                        ? "Caution: AtomSphAverageRHF is a spin-unpolarized fractional ensemble and is NOT directly matched to pure-spin LS term limits."
+                        : "Note: finite GTO basis error adds positive incompleteness error; UHF spin polarization can lie slightly below ROHF limits."}
+                    </p>
+                  </div>
+                )}
             </Panel>
 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

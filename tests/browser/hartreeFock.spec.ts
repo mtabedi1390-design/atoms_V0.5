@@ -16,7 +16,7 @@ async function bootLab(page: Page) {
   await expect(page.locator("header.h-12")).toContainText("Hydrogen");
 }
 
-test("Hartree–Fock workspace runs live PySCF UHF/RHF, enforces spin/method rules, projects 3D isosurface & 2D slice, and replays in Experiment History", async ({
+test("Hartree–Fock workspace runs live PySCF UHF/AtomSphAvg, enforces spin/method rules, exposes honest state taxonomy, projects 3D/2D grids, and replays in Experiment History", async ({
   page,
 }) => {
   await bootLab(page);
@@ -25,6 +25,12 @@ test("Hartree–Fock workspace runs live PySCF UHF/RHF, enforces spin/method rul
   // Live Express+PySCF backend detected cleanly
   await expect(page.getByTestId("hf-backend-status")).toContainText("PySCF active", { timeout: 15000 });
   await expect(page.getByTestId("hf-backend-status")).toContainText("PySCF 2.15.1");
+
+  // Method labels explicitly distinguish determinants, spherical ensemble, and unavailable term resolution
+  await expect(page.getByTestId("hf-method-rhf")).toContainText("RHF (det)");
+  await expect(page.getByTestId("hf-method-atom-sph-avg")).toContainText("AtomSphAvg (ensemble)");
+  await expect(page.getByText(/Term-resolved LS multiplets/i)).toBeVisible();
+  await expect(page.getByText("not implemented in v0.7.0")).toBeVisible();
 
   // Select Carbon (Z=6, 2S=2 open shell) -> RHF must be disabled honestly
   await page.getByTestId("hf-select-z").selectOption("6");
@@ -37,7 +43,11 @@ test("Hartree–Fock workspace runs live PySCF UHF/RHF, enforces spin/method rul
   await page.getByTestId("hf-run-btn").click();
 
   await expect(page.getByTestId("hf-results-panel")).toContainText("Converged", { timeout: 25000 });
+  await expect(page.getByTestId("hf-state-character")).toContainText("unrestricted-determinant");
+  await expect(page.getByTestId("hf-state-taxonomy")).toContainText("unavailable (not term-resolved)");
+  await expect(page.getByTestId("hf-state-taxonomy")).toContainText("J=N/A");
   await expect(page.getByTestId("hf-energy-table")).toContainText("-37.6834");
+  await expect(page.getByTestId("hf-energy-table")).toContainText("anisotropic det");
   await expect(page.getByTestId("hf-orbitals-table")).toContainText("alpha");
   await expect(page.getByTestId("hf-orbitals-table")).toContainText("beta");
   await expect(page.getByTestId("hf-scf-table")).toContainText("-37.6834");
@@ -64,6 +74,32 @@ test("Hartree–Fock workspace runs live PySCF UHF/RHF, enforces spin/method rul
   expect(errors).toEqual([]);
 });
 
+test("Hartree–Fock workspace disables AtomSphAvg for N<2 and runs AtomSphAvg spherical ensemble honestly on C", async ({
+  page,
+}) => {
+  await bootLab(page);
+  await page.getByTestId("ws-hartree-fock").click();
+  await expect(page.getByTestId("hf-backend-status")).toContainText("PySCF active", { timeout: 15000 });
+
+  // On Hydrogen (N=1), AtomSphAvg must be disabled (N<2)
+  await expect(page.getByTestId("hf-method-atom-sph-avg")).toBeDisabled();
+  await expect(page.getByTestId("hf-method-atom-sph-avg")).toContainText("N<2");
+
+  // Select Carbon (Z=6, N=6), AtomSphAvg is enabled and runs as spherical ensemble
+  await page.getByTestId("hf-select-z").selectOption("6");
+  await expect(page.getByTestId("hf-method-atom-sph-avg")).toBeEnabled();
+  await page.getByTestId("hf-select-basis").selectOption("cc-pvdz");
+  await page.getByTestId("hf-method-atom-sph-avg").click();
+  await page.getByTestId("hf-run-btn").click();
+
+  await expect(page.getByTestId("hf-state-character")).toContainText("spherical-ensemble-average", { timeout: 25000 });
+  await expect(page.getByTestId("hf-energy-table")).toContainText("unavailable (spin-unpolarized spherical ensemble)");
+  await expect(page.getByTestId("hf-energy-table")).toContainText("spherical (max");
+  await expect(page.getByTestId("hf-state-taxonomy")).toContainText("unavailable (not term-resolved)");
+
+  expect(errors).toEqual([]);
+});
+
 test("Hartree–Fock workspace reports backend offline honestly without faking results when endpoint is unavailable", async ({
   page,
 }) => {
@@ -85,4 +121,22 @@ test("Hartree–Fock workspace reports backend offline honestly without faking r
   await expect(page.getByText("Live Multi-Electron Solver Unavailable")).toBeVisible();
   await expect(page.getByTestId("hf-run-btn")).toBeDisabled();
   expect(errors.filter((e) => !e.includes("503 (Service Unavailable)"))).toEqual([]);
+});
+
+test("Static/viewer HTML fallback (non-JSON /api/hf/capabilities) disables live HF honestly", async ({ page }) => {
+  await page.route("**/api/hf/capabilities", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<!doctype html><html><body>SPA static fallback</body></html>",
+    }),
+  );
+
+  await bootLab(page);
+  await page.getByTestId("ws-hartree-fock").click();
+
+  await expect(page.getByTestId("hf-backend-status")).toContainText("backend offline");
+  await expect(page.getByText("Live Multi-Electron Solver Unavailable")).toBeVisible();
+  await expect(page.getByTestId("hf-run-btn")).toBeDisabled();
+  expect(errors).toEqual([]);
 });

@@ -12,10 +12,11 @@ All verification commands reported below were executed cleanly against the final
 | `npm run data:matrix` | 118-element observable coverage audit | **PASS** | 118 rows generated into `docs/ACCURACY_MATRIX.md` |
 | `npm run typecheck` (`npm run lint`) | Strict TypeScript compilation (`tsc --noEmit -p tsconfig.json`) | **PASS** | 0 errors across all modules |
 | `npm run test:native` | C++17 `native/quantum_core.hpp` Debug (`-O0 -g`) & Release (`-O2 -DNDEBUG`) | **PASS** | **340 checks, 0 failures** (both Debug & Release) |
-| `npm test` (Vitest) | Unit, Domain, Schrödinger, Dirac, Transitions, Spectroscopy, Stabilization, **Live PySCF HF**, Sampling, Visualization, Experiment Platform, C++ Parity | **PASS** | **17 test files, 133/133 tests passed** |
+| `npm test` (Vitest) | Unit, Domain, Schrödinger, Dirac, Transitions, Spectroscopy, Stabilization, **Live PySCF HF**, Sampling, Visualization, Experiment Platform, C++ Parity | **PASS** | **17 test files, 134/134 tests passed** |
 | `npm run build` | Vite production single-file client bundle + inline Web Workers | **PASS** | `dist/index.html` built cleanly (0 errors) |
-| `npm run test:browser` (Playwright) | Full-stack Express 5 + Python PySCF + Chromium + SwiftShader WebGL2 (`core`, `responsive`, `science`, `laboratory`, `hartreeFock`) | **PASS** | Executed across `v0.5`/`v0.6.1` regression (21 tests) + `v0.7.0` live Hartree–Fock & offline guard (2 tests) = **23 tests passing** |
+| `npm run test:browser` (Playwright) | Full-stack Express 5 + Python PySCF + Chromium + SwiftShader WebGL2 (`core`, `responsive`, `science`, `laboratory`, `hartreeFock`) | **PASS** | `v0.5`/`v0.6.1` regression (21 tests) + `v0.7.0` HF state taxonomy, `AtomSphAvg`, & offline/static guards (4 tests) = **25/25 passing** |
 | Layer isolation audit | Grep `src/domain`, `src/physics`, `src/experiments`, `src/numerics`, `src/sampling` (excl. `__tests__`) for `react`, `three`, `node:` | **PASS** | **0 matches** |
+| Workstream B & C runtime checks | Direct `compas/sphf` build/execution (`gfortran 12.3.0`), isolated `setup_python_backend.sh`, server start/stop/restart, Origin `403`, `EADDRINUSE`, & `vite preview` static mode | **PASS** | Verified end-to-end on Linux `x86_64` with zero orphaned processes |
 
 ---
 
@@ -23,8 +24,9 @@ All verification commands reported below were executed cleanly against the final
 
 ### 2.0 Multi-Electron Hartree–Fock Engine (`hartreeFock.test.ts`, `hartreeFock.spec.ts`)
 - **1-Electron Analytic Limits (`H`, `He+`)**: Monotonic convergence toward $-Z^2/2$ (`H`: `-0.499821 Ha`, `He+`: `-1.994290 Ha`) with strict self-interaction cancellation $|J + K| < 10^{-11}\text{ Ha}$.
-- **Closed-Shell RHF & Open-Shell UHF/ROHF/AtomSphAvg (`He`, `Li`, `Be`, `C`, `N`, `F`, `Ne`)**: Monotonic GTO basis convergence (`STO-3G` -> `cc-pVDZ` -> `cc-pVTZ` -> `aug-cc-pVTZ`) toward `compas/sphf` (`MIT`) and Koga–Thakkar (1999) HF limits; `ROHF` closed-shell eigenvalues and open-shell Koopmans $\langle F^\alpha \rangle$ verified on `Li` (`1s: -2.477798 Ha`, `2s <Fa>: -0.196313 Ha`).
-- **Invariants & Honest Rejection**: Energy decomposition consistency $|E - (T+V+J+K)| < 10^{-9}\text{ Ha}$, $\max|C^T S C - I| < 10^{-8}$, $\operatorname{Tr}(PS) = N$, 110-pt Lebedev radial integrals to $< 10^{-4}\,e$, unconverged `maxCycle=1` SCF rejection, `RHF 2S != 0` / finite-nucleus / missing-element (`K`, `Ca`, `Rb`) rejection, and full Worker/IndexedDB/JSON/3D+2D grid verification.
+- **Closed-Shell RHF & Direct `compas/sphf` B-Spline Matching**: Monotonic GTO basis convergence (`STO-3G` -> `cc-pVDZ` -> `cc-pVTZ` -> `aug-cc-pVTZ`) toward directly compiled & executed `compas/sphf` (`commit 913991f`, MIT) limits across `He, Li, Be, B, C, N, O, F, Ne, Cr`; `ROHF` closed-shell eigenvalues and open-shell Koopmans $\langle F^\alpha \rangle$ verified on `Li`.
+- **Open-Shell Matrix, State Taxonomy & Isotropy (`Li, B, C, N, O, F, Cr, C+`)**: Enforces distinct `stateCharacter` (`closed-shell-determinant`, `unrestricted-determinant`, `restricted-open-shell-determinant`, `spherical-ensemble-average`), explicit unavailability of `termSymbol`/`totalJ`/`lSquared` (`null`), `spinDiagnostics.available === false` on `atom-sph-avg`, `N >= 2` guard on `atom-sph-avg`, 110-pt Lebedev isotropy (`~1e-15` spherical ensembles vs anisotropic `B, C, O, F` determinants), custom `atomic_configuration` for `C+` ions (`tracePS = 5.0`), and `< 1.5e-14 Ha` `SO3` subshell degeneracy.
+- **Invariants & Honest Rejection**: Energy decomposition consistency $|E - (T+V+J+K)| < 10^{-9}\text{ Ha}$, $\max|C^T S C - I| < 10^{-8}$, $\operatorname{Tr}(PS) = N$, unconverged `maxCycle=1` SCF rejection, `RHF 2S != 0` / finite-nucleus / missing-element (`K`, `Ca`, `Rb`) rejection, and full Worker/IndexedDB/JSON/3D+2D grid verification.
 
 ### 2.1 Schrödinger–Coulomb Engine (`schrodingerProvider.test.ts`, `stabilization.test.ts`, `hydrogenic.test.ts`, `native_parity.test.ts`)
 - **All Magnetic Sublevels (`m_l !== 0`)**: Verified `ok: true` and exact polar-cone (`l - |m_l|`) / azimuthal node counts across every $m_l \in [-l..+l]$ for $2p, 3d, 4f$ in both real and complex bases.

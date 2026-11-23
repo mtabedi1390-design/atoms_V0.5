@@ -183,7 +183,7 @@ export function validateSubshellOccupations(
   return validationFromIssues(issues);
 }
 
-export function validateMethodForSpin(method: HFMethod, spin2S: number): ValidationResult {
+export function validateMethodForSpin(method: HFMethod, spin2S: number, N?: number): ValidationResult {
   if (method === "rhf" && spin2S !== 0) {
     return validationFromIssues([
       {
@@ -191,6 +191,17 @@ export function validateMethodForSpin(method: HFMethod, spin2S: number): Validat
         code: "RHF_OPEN_SHELL_FORBIDDEN",
         field: "method",
         message: `Closed-shell RHF requires singlet spin 2S = 0 (got 2S = ${spin2S}). Choose UHF, ROHF, or AtomSphAverageRHF.`,
+      },
+    ]);
+  }
+  if (method === "atom-sph-avg" && N !== undefined && N < 2) {
+    return validationFromIssues([
+      {
+        severity: "error",
+        code: "ATOM_SPH_AVG_REQUIRES_MULTI_ELECTRON",
+        field: "method",
+        message:
+          "PySCF AtomSphAverageRHF is a spin-unpolarized fractional ensemble designed for N >= 2 atoms. Select UHF or ROHF for 1-electron systems.",
       },
     ]);
   }

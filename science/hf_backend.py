@@ -248,6 +248,39 @@ def _compute_energy_decomposition(mol: gto.Mole, mf: Any, method: str) -> dict[s
     }
 
 
+def _compute_equally_occupied_split(
+    orbitals: list[dict[str, Any]],
+    irrep_occ: dict[str, tuple[int, int]] | None,
+) -> float | None:
+    if not irrep_occ:
+        return None
+    max_split: float | None = None
+    for spin_tag in ("spatial", "alpha", "beta"):
+        by_lm: dict[str, list[tuple[int, float]]] = {}
+        for o in orbitals:
+            if o["spin"] != spin_tag or o["occupation"] <= 1e-8:
+                continue
+            ir = str(o["irrep"])
+            if ir == "A" or len(ir) < 2:
+                continue
+            by_lm.setdefault(ir, []).append((int(o["index"]), float(o["energy_Ha"])))
+        for ch in ("p", "d", "f", "g"):
+            group_irs = [ir for ir in irrep_occ if ir.startswith(ch) and ir in by_lm]
+            if len(group_irs) < 2:
+                continue
+            # Check subshells across which all irreps share the same occupation tuple and count
+            occ_patterns = {irrep_occ[ir] for ir in group_irs}
+            if len(occ_patterns) == 1:
+                counts = {len(by_lm[ir]) for ir in group_irs}
+                if len(counts) == 1:
+                    n_shells = next(iter(counts))
+                    for k in range(n_shells):
+                        vals = [by_lm[ir][k][1] for ir in group_irs]
+                        sp = max(vals) - min(vals)
+                        max_split = sp if max_split is None else max(max_split, sp)
+    return max_split
+
+
 def _extract_orbitals_and_densities(
     mol: gto.Mole,
     mf: Any,
@@ -255,9 +288,10 @@ def _extract_orbitals_and_densities(
     spin2S: int,
     include_radial: bool,
     volume_spec: dict[str, Any] | None,
+    irrep_occ: dict[str, tuple[int, int]] | None,
 ) -> dict[str, Any]:
     S = mol.intor("int1e_ovlp")
-    use_symm = mol.symmetry and hasattr(mol, "irrep_name")
+    use_symm = bool(mol.symmetry and hasattr(mol, "irrep_name"))
 
     def irrep_for_mo(coeff_obj: Any, idx: int) -> str:
         orbsym = getattr(coeff_obj, "orbsym", None)
@@ -305,6 +339,7 @@ def _extract_orbitals_and_densities(
         s_exact = 0.5 * spin2S
         s2_exact = s_exact * (s_exact + 1.0)
         spin_diag = {
+            "available": True,
             "sSquared": float(s2_obs),
             "sSquaredExact": float(s2_exact),
             "spinContamination": float(s2_obs - s2_exact),
@@ -351,28 +386,46 @@ def _extract_orbitals_and_densities(
             s_exact = 0.5 * spin2S
             s2_exact = s_exact * (s_exact + 1.0)
             spin_diag = {
+                "available": True,
                 "sSquared": float(s2_exact),
                 "sSquaredExact": float(s2_exact),
                 "spinContamination": 0.0,
                 "multiplicity": float(spin2S + 1),
+            }
+        elif method == "atom-sph-avg":
+            dm_tot = np.asarray(mf.make_rdm1(), dtype=np.float64)
+            dm_a = 0.5 * dm_tot
+            dm_b = 0.5 * dm_tot
+            spin_diag = {
+                "available": False,
+                "sSquared": None,
+                "sSquaredExact": None,
+                "spinContamination": None,
+                "multiplicity": None,
+                "unavailableReason": (
+                    "AtomSphAverageRHF is a spin-unpolarized fractional-occupation spherical ensemble, "
+                    "not a pure-spin N-electron Slater determinant; <S^2> is undefined."
+                ),
             }
         else:
             dm_tot = np.asarray(mf.make_rdm1(), dtype=np.float64)
             dm_a = 0.5 * dm_tot
             dm_b = 0.5 * dm_tot
             spin_diag = {
+                "available": True,
                 "sSquared": 0.0,
                 "sSquaredExact": 0.0,
                 "spinContamination": 0.0,
                 "multiplicity": 1.0,
             }
 
-    # Radial density profiles on deterministic Lebedev sphere x log grid
+    # Radial density profiles & 110-pt Lebedev angular isotropy diagnostics
+    n_ang = 110
+    dirs, ang_weights = lebedev_sphere(n_ang)
     radial_data = None
+
     if include_radial:
-        n_ang = 110
         n_rad = 320
-        dirs, ang_weights = lebedev_sphere(n_ang)
         r_min = 1.0e-4
         r_max = 36.0
         expected_n = float(mol.nelectron)
@@ -380,30 +433,40 @@ def _extract_orbitals_and_densities(
         for _ in range(3):
             r_grid = np.geomspace(r_min, r_max, n_rad)
             u_grid = np.log(r_grid)
-            # Evaluate all points in one vectorized call: shape (n_rad * n_ang, 3)
             pts = (r_grid[:, None, None] * dirs[None, :, :]).reshape(-1, 3)
-            ao = mol.eval_gto("GTOval_sph", pts)  # (P, nao)
-            # Vectorized density evaluation across all radial shells with exact Lebedev weights
+            ao = mol.eval_gto("GTOval_sph", pts)
             rho_a_pts = np.einsum("pi,ij,pj->p", ao, dm_a, ao)
             rho_b_pts = np.einsum("pi,ij,pj->p", ao, dm_b, ao)
-            rho_a = (rho_a_pts.reshape(n_rad, n_ang) @ ang_weights)
-            rho_b = (rho_b_pts.reshape(n_rad, n_ang) @ ang_weights)
+            rho_a_2d = rho_a_pts.reshape(n_rad, n_ang)
+            rho_b_2d = rho_b_pts.reshape(n_rad, n_ang)
+            rho_a = rho_a_2d @ ang_weights
+            rho_b = rho_b_2d @ ang_weights
             rho_tot = rho_a + rho_b
             rho_spin = rho_a - rho_b
             pr_tot = 4.0 * math.pi * (r_grid ** 2) * rho_tot
-            # Integrand in u = ln(r) is r * P_r(r) = 4*pi*r^3*rho(r), plus core [0, r_min]
             core_n = (4.0 * math.pi / 3.0) * (r_min ** 3) * float(rho_tot[0])
             int_n = float(np.trapezoid(r_grid * pr_tot, u_grid)) + core_n
             if abs(int_n - expected_n) <= 5e-4:
                 break
             r_max *= 1.5
 
+        rho_tot_2d = rho_a_2d + rho_b_2d
+        sig_mask = pr_tot > 1e-4 * float(np.max(pr_tot))
+        if np.any(sig_mask):
+            rel_dev = np.max(np.abs(rho_tot_2d[sig_mask] - rho_tot[sig_mask, None]), axis=1) / np.maximum(rho_tot[sig_mask], 1e-30)
+            rms_shells = np.sqrt(((rho_tot_2d[sig_mask] - rho_tot[sig_mask, None]) ** 2) @ ang_weights) / np.maximum(rho_tot[sig_mask], 1e-30)
+            max_aniso = float(np.max(rel_dev))
+            weights_rad = pr_tot[sig_mask] / float(np.sum(pr_tot[sig_mask]))
+            rms_aniso = float(np.sum(weights_rad * rms_shells))
+        else:
+            max_aniso = 0.0
+            rms_aniso = 0.0
+
         pr_spin = 4.0 * math.pi * (r_grid ** 2) * rho_spin
         core_spin = (4.0 * math.pi / 3.0) * (r_min ** 3) * float(rho_spin[0])
         int_spin = float(np.trapezoid(r_grid * pr_spin, u_grid)) + core_spin
         mean_r = (float(np.trapezoid((r_grid ** 2) * pr_tot, u_grid)) + 0.75 * r_min * core_n) / max(int_n, 1e-12)
 
-        # Also export sphericalized radial probability for occupied orbitals (up to 10)
         occ_radial = []
         if method == "uhf":
             C_use = np.asarray(mf.mo_coeff[0], dtype=np.float64)
@@ -416,7 +479,7 @@ def _extract_orbitals_and_densities(
 
         occ_indices = [i for i in range(len(Occ_use)) if Occ_use[i] > 1e-8][:10]
         if occ_indices:
-            mo_vals = ao @ C_use[:, occ_indices]  # (P, K)
+            mo_vals = ao @ C_use[:, occ_indices]
             mo_sq = ((mo_vals ** 2).reshape(n_rad, n_ang, len(occ_indices)) * ang_weights[None, :, None]).sum(axis=1)
             for k, mo_idx in enumerate(occ_indices):
                 prob_r = 4.0 * math.pi * (r_grid ** 2) * mo_sq[:, k]
@@ -442,6 +505,36 @@ def _extract_orbitals_and_densities(
             "anglePoints": n_ang,
             "orbitalRadialProbs": occ_radial,
         }
+    else:
+        r_sample = np.array([0.25, 0.75, 1.5, 3.0], dtype=np.float64)
+        pts = (r_sample[:, None, None] * dirs[None, :, :]).reshape(-1, 3)
+        ao = mol.eval_gto("GTOval_sph", pts)
+        rho_2d = np.einsum("pi,ij,pj->p", ao, dm_tot, ao).reshape(len(r_sample), n_ang)
+        rho_avg = rho_2d @ ang_weights
+        valid = rho_avg > 1e-12
+        if np.any(valid):
+            rel = np.max(np.abs(rho_2d[valid] - rho_avg[valid, None]), axis=1) / rho_avg[valid]
+            rms_shells = np.sqrt(((rho_2d[valid] - rho_avg[valid, None]) ** 2) @ ang_weights) / rho_avg[valid]
+            max_aniso = float(np.max(rel))
+            rms_aniso = float(np.sqrt(np.mean(rms_shells ** 2)))
+        else:
+            max_aniso = 0.0
+            rms_aniso = 0.0
+
+    angular_diag = {
+        "quadraturePoints": n_ang,
+        "maxRelativeAnisotropy": max_aniso,
+        "rmsRelativeAnisotropy": rms_aniso,
+        "isSphericallySymmetric": bool(max_aniso < 1e-7),
+        "spatialSymmetryGroup": str(mol.topgroup) if use_symm else "C1",
+        "lSquaredAvailable": False,
+        "lSquared": None,
+        "lSquaredUnavailableReason": (
+            "Total orbital angular momentum <L^2> is not computed from a single Slater determinant or "
+            "AtomSphAverageRHF ensemble; L^2 projection requires multi-determinant LS configuration state functions."
+        ),
+        "equallyOccupiedSubshellSplitMax_Ha": _compute_equally_occupied_split(orbitals, irrep_occ),
+    }
 
     # Optional 3D volumetric scalar field for Marching Tetrahedra isosurfaces & 2D slices
     volume_data = None
@@ -489,6 +582,7 @@ def _extract_orbitals_and_densities(
         "orbitals": orbitals,
         "orthonormalityError": max_ortho_err,
         "spinDiagnostics": spin_diag,
+        "angularDiagnostics": angular_diag,
         "radialProfiles": radial_data,
         "volumeGrid": volume_data,
         "aoCount": int(mol.nao_nr()),
@@ -545,7 +639,9 @@ def handle_calculate(payload: dict[str, Any]) -> dict[str, Any]:
     if method not in SUPPORTED_METHODS:
         raise ValueError(f"Unsupported HF method '{method}'.")
     if method == "rhf" and spin2S != 0:
-        raise ValueError(f"RHF requires closed-shell singlet (2S=0); got 2S={spin2S}. Select UHF or ROHF.")
+        raise ValueError(f"RHF requires closed-shell singlet (2S=0); got 2S={spin2S}. Select UHF, ROHF, or AtomSphAverageRHF.")
+    if method == "atom-sph-avg" and N < 2:
+        raise ValueError("PySCF AtomSphAverageRHF requires N >= 2 electrons; select UHF or ROHF for 1-electron systems.")
     if basis_key not in SUPPORTED_BASES:
         raise ValueError(f"Unsupported basis '{basis_key}'. Allowed: {', '.join(SUPPORTED_BASES)}")
 
@@ -565,6 +661,9 @@ def handle_calculate(payload: dict[str, Any]) -> dict[str, Any]:
 
     t_setup = (time.perf_counter() - t_start) * 1000.0
 
+    irrep_occ: dict[str, tuple[int, int]] | None = None
+    sph_l_totals: list[int] | None = None
+
     if method == "rhf":
         mf = scf.RHF(mol)
     elif method == "uhf":
@@ -573,6 +672,20 @@ def handle_calculate(payload: dict[str, Any]) -> dict[str, Any]:
         mf = scf.ROHF(mol)
     else:
         mf = atom_hf.AtomSphAverageRHF(mol)
+        if subshells:
+            l_totals = [0, 0, 0, 0]
+            for s in subshells:
+                l_val = int(s["l"])
+                if l_val >= 4:
+                    raise ValueError(f"AtomSphAverageRHF atomic_configuration supports l <= 3 (s..f), got l={l_val}.")
+                l_totals[l_val] += int(s["alpha"]) + int(s["beta"])
+            mf.atomic_configuration = {Z: l_totals}
+            sph_l_totals = l_totals
+        elif N != Z:
+            # Derive [s, p, d, f] totals cleanly from PySCF's Aufbau fallback if no custom subshells provided
+            raise ValueError(
+                "Ion calculation under AtomSphAverageRHF (N != Z) requires explicit subshellOccupations to define [s, p, d, f] electron counts."
+            )
 
     if subshells and use_symmetry and method in ("rhf", "uhf", "rohf"):
         irrep_occ = _irrep_nelec_from_subshells(mol, subshells)
@@ -628,7 +741,6 @@ def handle_calculate(payload: dict[str, Any]) -> dict[str, Any]:
     t_scf = (time.perf_counter() - t_scf0) * 1000.0
 
     if not scf_history:
-        # e.g. 1-electron core Hamiltonian converges on cycle 0 before callback
         scf_history.append({
             "cycle": 0,
             "eTotal_Ha": float(mf.e_tot),
@@ -656,12 +768,84 @@ def handle_calculate(payload: dict[str, Any]) -> dict[str, Any]:
         spin2S,
         include_radial=bool(payload.get("includeRadialGrid", True)),
         volume_spec=payload.get("volumeGrid"),
+        irrep_occ=irrep_occ,
     )
     t_diag = (time.perf_counter() - t_diag0) * 1000.0
 
     t_total = (time.perf_counter() - t_start) * 1000.0
     _, peak_bytes = tracemalloc.get_traced_memory()
     tracemalloc.stop()
+
+    if method == "rhf":
+        state_char = "closed-shell-determinant"
+        ansatz_label = "Restricted Closed-Shell Slater Determinant (RHF)"
+        spin_status = "spin-pure"
+    elif method == "uhf":
+        state_char = "unrestricted-determinant"
+        ansatz_label = "Spin-Unrestricted Single Slater Determinant (UHF, α/β spatial orbitals)"
+        spin_status = "spin-unrestricted-broken-possible"
+    elif method == "rohf":
+        state_char = "restricted-open-shell-determinant"
+        ansatz_label = "Restricted Open-Shell Single Slater Determinant (ROHF, Roothaan Fc=(Fa+Fb)/2)"
+        spin_status = "spin-pure"
+    else:
+        state_char = "spherical-ensemble-average"
+        ansatz_label = "Spin-Unpolarized Spherically Averaged Fractional Atomic Ensemble (PySCF AtomSphAverageRHF)"
+        spin_status = "spin-unpolarized-ensemble"
+
+    so3_used = bool(use_symmetry and method != "atom-sph-avg")
+    mag_occ_out = (
+        {k: [int(v[0]), int(v[1])] for k, v in irrep_occ.items() if v[0] > 0 or v[1] > 0}
+        if irrep_occ is not None
+        else None
+    )
+    if method == "atom-sph-avg":
+        mag_note = (
+            f"Spin-unpolarized fractional m_l averaging across angular momentum blocks "
+            f"[s,p,d,f]={sph_l_totals if sph_l_totals is not None else 'PySCF NRSRHF_CONFIGURATION'}; ignores spin excess 2S={spin2S}."
+        )
+    elif irrep_occ is not None:
+        mag_note = (
+            "Explicit real-spherical-harmonic (l, m_l) irrep_nelec enforced under PySCF SO3 symmetry; "
+            "note PySCF diagonalizes each (l, m_l) block independently (no cross-m_l coefficient tying in hf_symm)."
+        )
+    else:
+        mag_note = "C1 symmetry (no explicit magnetic-sublevel irrep constraint enforced; orbital mixing allowed)."
+
+    state_notes = [
+        "Non-relativistic fixed point-infinite-mass Hamiltonian only.",
+        "Term-resolved LS multiplets (^{2S+1}L) and relativistic J eigenstates are NOT computed in v0.7.0.",
+    ]
+    if method == "atom-sph-avg":
+        state_notes.append(
+            "PySCF AtomSphAverageRHF subclasses RHF, disables molecular symmetry (symmetry=False in get_atm_nrhf), "
+            "and averages Fock/overlap blocks per l; it is a spherical ensemble guess, not an LS term or open-shell determinant."
+        )
+    elif so3_used:
+        state_notes.append(
+            "PySCF SO3 blocks angular momentum l and real m_l mixing, while asymmetric open shells (e.g. 2p1, 2p2, 2p4, 2p5, 3d^k) "
+            "form oriented anisotropic determinants whose single-determinant energy matches real-orbital occupation choices."
+        )
+
+    state_info = {
+        "stateCharacter": state_char,
+        "ansatzLabel": ansatz_label,
+        "spinSymmetryStatus": spin_status,
+        "so3SymmetryUsed": so3_used,
+        "magneticSublevelOccupations": mag_occ_out,
+        "magneticSublevelNote": mag_note,
+        "termResolution": {
+            "supported": False,
+            "termSymbol": None,
+            "totalJ": None,
+            "lSquaredAvailable": False,
+            "reason": (
+                "Single-determinant HF (RHF/UHF/ROHF) and AtomSphAverageRHF do not project eigenstates of "
+                "total orbital angular momentum L^2, LS-coupled terms ^{2S+1}L, or relativistic J."
+            ),
+        },
+        "notes": state_notes,
+    }
 
     return {
         "ok": bool(mf.converged),
@@ -681,6 +865,8 @@ def handle_calculate(payload: dict[str, Any]) -> dict[str, Any]:
             if method == "rohf"
             else None
         ),
+        "stateInfo": state_info,
+        "angularDiagnostics": details["angularDiagnostics"],
         "scf": {
             "converged": bool(mf.converged),
             "cycles": int(mf.cycles),

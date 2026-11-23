@@ -9,7 +9,7 @@ Every orbital eigenvalue, spatial wavefunction, radial density profile, spin den
 ## 1. Orbital Output & Overlap-Metric Orthonormality
 
 For each occupied orbital (plus up to 5 low-lying virtual orbitals above the HOMO for LUMO inspection), ATOMS returns:
-- Orbital index (`index`), spin channel (`"closed"` for RHF / `AtomSphAvg`, `"alpha"` / `"beta"` for UHF, `"rohf"` with separate occupation breakdown for ROHF), `SO(3)` symmetry irrep label (`irrep`), occupation number, and orbital energy (`energy_Ha`, `energy_eV`).
+- Orbital index (`index`), spin channel (`"spatial"` for RHF / `AtomSphAvg` / ROHF, `"alpha"` / `"beta"` for UHF), `SO(3)` or `C1` symmetry irrep label (`irrep`), occupation number, and orbital energy (`energy_Ha`, `energy_eV`).
 - For **ROHF**, ATOMS additionally computes exact single-determinant Koopmans Fock expectations $\langle \psi_i | \hat{F}^\alpha | \psi_i \rangle$ and $\langle \psi_i | \hat{F}^\beta | \psi_i \rangle$ alongside the Roothaan effective Fock eigenvalue.
 - **Correct Non-Orthogonal Basis Metric Verification**:
   Gaussian basis functions are non-orthogonal ($S_{\mu\nu} \ne \delta_{\mu\nu}$). ATOMS verifies true orthonormality under the overlap metric:
@@ -17,17 +17,18 @@ For each occupied orbital (plus up to 5 low-lying virtual orbitals above the HOM
 
 ---
 
-## 2. Sphericalized Radial Profiles via 110-Point Lebedev Quadrature
+## 2. Sphericalized Radial Profiles & Angular Isotropy via 110-Point Lebedev Quadrature
 
-Open-shell neutral atoms (such as `C 2p²` or `B 2p¹`) have **nonspherical** 3D electron and spin densities in Cartesian Gaussian SCF. A coarse angular quadrature (e.g., 64 Fibonacci points) loses accuracy on angular $p/d$ harmonics (`~1.2e-3 e` error on C).
+Open-shell neutral atoms with partially filled $p$ or $d$ subshells (such as `B 2p1`, `C 2p2`, `O 2p4`, `F 2p5`) have **nonspherical** 3D electron and spin densities in Cartesian/real-harmonic SCF, whereas `AtomSphAverageRHF` fractional ensembles and half-filled/closed shells (`Li, N, Cr, He, Be, Ne`) are spherically symmetric.
 
-`science/hf_backend.py` therefore integrates over the sphere using **PySCF `dft.gen_grid.MakeAngularGrid(110)`** (110-point octahedral-symmetric Lebedev quadrature, exact through spherical degree $l = 17$):
+`science/hf_backend.py` integrates over the sphere using **PySCF `dft.gen_grid.MakeAngularGrid(110)`** (110-point octahedral-symmetric Lebedev quadrature, exact through spherical degree $l = 17$) across 220 log-spaced shells ($r \in [10^{-4}, 14]\,a_0$) plus core sampling:
 
 $$\bar{\rho}(r_k) = \sum_{q=1}^{110} w_q \rho(r_k \hat{\mathbf{u}}_q), \qquad P(r_k) = 4\pi r_k^2 \bar{\rho}(r_k),$$
 
-integrated radially over $220$ log-spaced points ($r \in [10^{-4}, 14]\,a_0$) plus core sphere sampling ($r < 10^{-4}\,a_0$):
-- **Measured precision across `H..Cr` (including nonspherical `C 2p²`)**:
-  $$\left|\int_0^\infty 4\pi r^2\bar{\rho}(r)\,dr - N\right| \lesssim 10^{-7}\text{ to }10^{-8}\,e, \qquad \left|\int_0^\infty 4\pi r^2\bar{\rho}_s(r)\,dr - (N_\alpha - N_\beta)\right| \lesssim 10^{-7}\,e.$$
+and computes `angularDiagnostics`:
+- `maxRelativeAnisotropy` & `rmsRelativeAnisotropy`: $\max_{r, q} |\rho(r\hat{\mathbf{u}}_q) - \bar{\rho}(r)| / \bar{\rho}(r)$ (`~2e-15` for all `AtomSphAverageRHF` runs and `Li/N/Cr` determinants; `0.50–1.72` for oriented `B, C, O, F` open-shell determinants).
+- **`lSquaredAvailable = false` (`lSquared = null`)**: ATOMS never estimates $\langle \hat{L}^2 \rangle$ from a one-particle density; computing two-electron $\langle \hat{L}^2 \rangle$ rigorously requires full 2-particle density/determinant angular-momentum matrix elements.
+- **Measured normalization precision**: $|\int 4\pi r^2\bar{\rho}(r)\,dr - N| \lesssim 10^{-7}\text{ to }10^{-8}\,e$, $|\int 4\pi r^2\bar{\rho}_s(r)\,dr - (N_\alpha - N_\beta)| \lesssim 10^{-7}\,e$.
 
 ---
 

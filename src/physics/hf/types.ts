@@ -86,6 +86,13 @@ export interface HFCapabilitiesResponse {
   };
   readonly methods?: readonly HFMethod[];
   readonly bases?: readonly HFCapabilitiesBasisEntry[];
+  readonly runtime?: {
+    readonly executionMode: "full-local-scientific";
+    readonly bindHost: string;
+    readonly port: number;
+    readonly nodeVersion: string;
+    readonly pid: number;
+  };
 }
 
 export interface HFSCFCycleEntry {
@@ -124,11 +131,53 @@ export interface HFOrbitalRecord {
   readonly fockBeta_Ha?: number;
 }
 
+export type HFStateCharacter =
+  | "closed-shell-determinant"
+  | "unrestricted-determinant"
+  | "restricted-open-shell-determinant"
+  | "spherical-ensemble-average";
+
+export interface HFTermResolutionStatus {
+  readonly supported: false;
+  readonly termSymbol: null;
+  readonly totalJ: null;
+  readonly lSquaredAvailable: false;
+  readonly reason: string;
+}
+
+export interface HFStateInfo {
+  readonly stateCharacter: HFStateCharacter;
+  readonly ansatzLabel: string;
+  readonly spinSymmetryStatus:
+    | "spin-pure"
+    | "spin-unrestricted-broken-possible"
+    | "spin-unpolarized-ensemble";
+  readonly so3SymmetryUsed: boolean;
+  readonly magneticSublevelOccupations: Readonly<Record<string, readonly [number, number]>> | null;
+  readonly magneticSublevelNote: string;
+  readonly termResolution: HFTermResolutionStatus;
+  readonly notes: readonly string[];
+}
+
+export interface HFAngularDiagnostics {
+  readonly quadraturePoints: number;
+  readonly maxRelativeAnisotropy: number;
+  readonly rmsRelativeAnisotropy: number;
+  readonly isSphericallySymmetric: boolean;
+  readonly spatialSymmetryGroup: string;
+  readonly lSquaredAvailable: false;
+  readonly lSquared: null;
+  readonly lSquaredUnavailableReason: string;
+  readonly equallyOccupiedSubshellSplitMax_Ha: number | null;
+}
+
 export interface HFSpinDiagnostics {
-  readonly sSquared: number;
-  readonly sSquaredExact: number;
-  readonly spinContamination: number;
-  readonly multiplicity: number;
+  readonly available: boolean;
+  readonly sSquared: number | null;
+  readonly sSquaredExact: number | null;
+  readonly spinContamination: number | null;
+  readonly multiplicity: number | null;
+  readonly unavailableReason?: string;
 }
 
 export interface HFOrbitalRadialProfile {
@@ -182,6 +231,8 @@ export interface HFCalculationResponse {
   readonly basisSource?: string;
   readonly symmetryGroup?: string;
   readonly rohfConvention?: string | null;
+  readonly stateInfo?: HFStateInfo;
+  readonly angularDiagnostics?: HFAngularDiagnostics;
   readonly scf?: {
     readonly converged: boolean;
     readonly cycles: number;

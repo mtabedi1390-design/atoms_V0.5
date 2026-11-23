@@ -149,6 +149,17 @@ export function createPyscfLiveProvider(
         };
       }
 
+      if (state.method === "atom-sph-avg" && system.N < 2) {
+        return {
+          supported: false,
+          evidenceClass: "unavailable",
+          reasons: [
+            "PySCF AtomSphAverageRHF requires N >= 2 electrons (spin-unpolarized fractional averaging). Select UHF or ROHF for 1-electron systems.",
+          ],
+          limitations: [],
+        };
+      }
+
       const basisMeta = getBasisCatalogEntry(state.basis);
       return {
         supported: true,
@@ -158,6 +169,7 @@ export function createPyscfLiveProvider(
         ],
         limitations: [
           "Non-relativistic fixed-nucleus Hartree–Fock (omits electron correlation, relativity, and finite nuclear size).",
+          "Does NOT resolve LS-coupled multireference terms (^{2S+1}L), relativistic J, or <L^2>.",
           basisMeta.knownLimitations,
         ],
       };
@@ -292,10 +304,19 @@ export function createPyscfLiveProvider(
         });
       }
 
+      if (input.state.method === "atom-sph-avg" && response.angularDiagnostics) {
+        checks.push({
+          name: "Spherical Ensemble Angular Isotropy",
+          passed: response.angularDiagnostics.isSphericallySymmetric,
+          detail: `110-pt Lebedev max Δρ/ρ̄ = ${response.angularDiagnostics.maxRelativeAnisotropy.toExponential(2)} (required < 1e-7)`,
+        });
+      }
+
       const allPassed = checks.every((c) => c.passed);
       context.onProgress?.(1, "Complete");
 
       const engineVer = response.runtime?.engineVersion ?? "2.15.1";
+      const stateChar = response.stateInfo?.stateCharacter ?? input.state.method;
       return {
         ok: allPassed,
         data: response,
@@ -304,19 +325,20 @@ export function createPyscfLiveProvider(
         provenance: {
           providerId: PYSCF_LIVE_PROVIDER_ID,
           providerVersion: `${PYSCF_LIVE_PROVIDER_VERSION} (PySCF ${engineVer})`,
-          modelName: `Non-relativistic ${input.state.method.toUpperCase()} / ${basisMeta.label}`,
+          modelName: `Non-relativistic ${input.state.method.toUpperCase()} (${stateChar}) / ${basisMeta.label}`,
           hamiltonian: "H = Σ[-½∇ᵢ² - Z/rᵢ] + Σ_{i<j} 1/rᵢⱼ (fixed point-infinite-mass nucleus, a.u.)",
           constantsVersion: CONSTANTS_VERSION,
           evidenceClass: "computed-and-validated",
           assumptions: [
             "Non-relativistic Born–Oppenheimer fixed point nucleus (infinite nuclear mass).",
             `Gaussian basis: ${basisMeta.label} (${response.basisSource ?? `BSE v${basisMeta.bseVersion}`}), ${basisMeta.harmonics} harmonics.`,
-            response.rohfConvention
-              ? response.rohfConvention
-              : `Method: ${input.state.method.toUpperCase()}, spin 2S=${input.state.spin2S}, symmetry=${response.symmetryGroup ?? "C1"}.`,
+            response.stateInfo?.ansatzLabel ??
+              `Method: ${input.state.method.toUpperCase()}, spin 2S=${input.state.spin2S}, symmetry=${response.symmetryGroup ?? "C1"}.`,
+            ...(response.rohfConvention ? [response.rohfConvention] : []),
           ],
           limitations: [
-            "Single-determinant Hartree–Fock omits electron correlation (E_corr ≈ negative) and relativistic corrections.",
+            "Single-determinant Hartree–Fock / spherical average omits electron correlation (E_corr < 0) and relativistic effects.",
+            "Term-resolved LS multiplets (^{2S+1}L), total J, and <L^2> are NOT computed (unavailable in v0.7.0).",
             basisMeta.knownLimitations,
           ],
           numericalQuality: {
@@ -334,7 +356,7 @@ export function createPyscfLiveProvider(
             },
           },
           uncertainty: {
-            modelApproximationNote: `Finite-basis ${basisMeta.label} non-relativistic HF (converged to ${response.scf.convTol.toExponential(1)} Ha); residual errors come from basis incompleteness, omission of Coulomb correlation, and relativistic effects.`,
+            modelApproximationNote: `Finite-basis ${basisMeta.label} non-relativistic HF (${stateChar}, converged to ${response.scf.convTol.toExponential(1)} Ha); residual differences arise from basis incompleteness, state definition (determinant vs ensemble vs LS term), omission of Coulomb correlation, and relativistic effects.`,
           },
           sourceCitation: `Sun et al., WIREs Comput. Mol. Sci. 8, e1340 (2018); J. Chem. Phys. 153, 024109 (2020); ${basisMeta.citation}`,
           license: "Apache-2.0 (PySCF & libcint) + BSD-3-Clause (Basis Set Exchange)",

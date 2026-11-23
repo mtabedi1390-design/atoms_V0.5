@@ -1,46 +1,77 @@
 # Multi-Electron Hartree–Fock Scientific Validation (`ATOMS v0.7.0`)
 
-All Hartree–Fock validation evidence below separates **independent pinned references**, **live PySCF/libcint/BSE measurements**, and **automated ATOMS tests**. Note that direct local compilation of `compas/sphf` Fortran sources could not be run because `gfortran` is not installed in the execution container; published `compas/sphf` (`MIT`, `test_all/out1..out5`) and Koga, Kanayama, Watanabe & Thakkar (*Int. J. Quantum Chem.* **71**, 491, 1999) HF limits serve as the independent numerical references.
+All Hartree–Fock validation evidence below separates **(1) directly compiled and executed `compas/sphf` B-spline numerical HF benchmarks**, **(2) matched PySCF `2.15.1` (`libcint`, `BSE 0.12`) Gaussian basis-sequence runs**, **(3) the open-shell `Li, B, C, N, O, F, Cr, C+` validation matrix**, and **(4) automated Vitest + Playwright checks**.
 
 ---
 
-## 1. Independent Numerical Benchmarks vs Live PySCF `2.15.1` (`BSE v0.12`)
+## 1. Direct Upstream `compas/sphf` Build & Reproducibility Record
 
-Measured directly with `/opt/atoms-py/bin/python science/hf_backend.py` (`convTol = 1e-10 Ha`, `SO(3)` symmetry unless noted):
-
-| System | Config (`2S`) | Method / Basis | $N_{\text{AO}}$ | SCF Cycles | $E_{\text{HF}}$ (Ha) | Independent Limit (Ha) & Source | $\Delta E = E_{\text{GTO}} - E_{\text{lim}}$ (mHa) | $\langle S^2 \rangle$ (Exact) | Virial $-V/T$ | Total / Peak Mem |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **H** ($Z=1,N=1$) | $1s^1$ ($1$) | UHF / `aug-cc-pVTZ` | 23 | 0 | `-0.499821176` | `-0.500000000` (Analytic $-Z^2/2$) | `+0.1788` (basis bound) | `0.750000` (`0.75`) | `2.001032` | `110.4 ms` / `8.9 MB` |
-| **$\text{He}^+$** ($Z=2,N=1$) | $1s^1$ ($1$) | UHF / `aug-cc-pVTZ` | 23 | 0 | `-1.994290049` | `-2.000000000` (Analytic $-Z^2/2$) | `+5.7100` (basis bound) | `0.750000` (`0.75`) | — | verified in Vitest |
-| **He** ($Z=2,N=2$) | $1s^2$ ($0$) | RHF / `STO-3G` | 1 | 2 | `-2.807783958` | `-2.861679996` (`compas/sphf out1`) | `+53.8960` | `0.000000` (`0`) | `1.994425` | `517.2 ms` / `17.3 MB` |
-| **He** ($Z=2,N=2$) | $1s^2$ ($0$) | RHF / `cc-pVTZ` | 14 | 4 | `-2.861153345` | `-2.861679996` (`compas/sphf out1`) | `+0.5267` | `0.000000` (`0`) | `2.000001` | `141.0 ms` / `6.1 MB` |
-| **He** ($Z=2,N=2$) | $1s^2$ ($0$) | RHF / `aug-cc-pVTZ` | 23 | 5 | `-2.861183426` | `-2.861679996` (`compas/sphf out1`) | `+0.4966` | `0.000000` (`0`) | `2.000512` | `249.0 ms` / `8.9 MB` |
-| **Li** ($Z=3,N=3$) | $1s^2 2s^1$ ($1$) | UHF / `aug-cc-pVTZ` | 46 | 6 | `-7.432705327` | `-7.432726931` (`compas/sphf out2`, ROHF) | `+0.0216` (with spin pol.) | `0.750014` (`0.75`) | `2.000003` | `570.3 ms` / `20.1 MB` |
-| **Li** ($Z=3,N=3$) | $1s^2 2s^1$ ($1$) | ROHF / `aug-cc-pVTZ` | 46 | 7 | `-7.432682118` | `-7.432726931` (`compas/sphf out2`, ROHF) | `+0.0448` | `0.750000` (`0.75`) | `2.000002` | `503.2 ms` / `20.1 MB` |
-| **Be** ($Z=4,N=4$) | $1s^2 2s^2$ ($0$) | RHF / `aug-cc-pVTZ` | 46 | 6 | `-14.572875342` | `-14.573023168` (`compas/sphf out4`) | `+0.1478` | `0.000000` (`0`) | `2.000122` | `434.3 ms` / `20.0 MB` |
-| **C** ($Z=6,N=6$) | $2s^2 2p^2$ ($2$) | UHF / `cc-pVDZ` | 14 | 7 | `-37.683404661` | `-37.6886190` (Koga 1999, $^3P$ ROHF) | `+5.2143` | `2.002212` (`2.0`) | `1.999874` | `282.5 ms` / `8.6 MB` |
-| **C** ($Z=6,N=6$) | $2s^2 2p^2$ ($2$) | UHF / `aug-cc-pVTZ` | 46 | 9 | `-37.688126130` | `-37.6886190` (Koga 1999, $^3P$ ROHF) | `+0.4929` | `2.004193` (`2.0`) | `2.000213` | `616.9 ms` / `21.7 MB` |
-| **C** ($Z=6,N=6$) | $2s^2 2p^2$ | AtomSphAvg / `aug-cc-pVTZ` | 46 | 7 | `-37.342615461` | Distinct spherical-avg formalism | (higher by ~346 mHa) | `0.000000` | `2.000178` | `301.7 ms` / `22.4 MB` |
-| **N** ($Z=7,N=7$) | $2s^2 2p^3$ ($3$) | UHF / `aug-cc-pVTZ` | 46 | 8 | `-54.401162240` | `-54.4009342` (Koga 1999, $^4S$ ROHF) | `-0.2280` (UHF < ROHF var.) | `3.757615` (`3.75`) | `2.000220` | `577.7 ms` / `22.5 MB` |
-| **N** ($Z=7,N=7$) | $2s^2 2p^3$ ($3$) | ROHF / `aug-cc-pVTZ` | 46 | 9 | `-54.397609523` | `-54.4009342` (Koga 1999, $^4S$ ROHF) | `+3.3247` | `3.750000` (`3.75`) | `2.000266` | `493.4 ms` / `22.6 MB` |
-| **Ne** ($Z=10,N=10$) | $2s^2 2p^6$ ($0$) | RHF / `STO-3G` | 5 | 2 | `-126.604524997` | `-128.5470981` (Koga 1999) | `+1942.6` | `0.000000` (`0`) | `2.008303` | `107.9 ms` / `6.9 MB` |
-| **Ne** ($Z=10,N=10$) | $2s^2 2p^6$ ($0$) | RHF / `def2-SVP` | 14 | 5 | `-128.376406810` | `-128.5470981` (Koga 1999) | `+170.7` | `0.000000` (`0`) | `2.000000` | `167.9 ms` / `9.3 MB` |
-| **Ne** ($Z=10,N=10$) | $2s^2 2p^6$ ($0$) | RHF / `def2-TZVP` | 31 | 6 | `-128.541492759` | `-128.5470981` (Koga 1999) | `+5.605` | `0.000000` (`0`) | `2.000000` | `299.6 ms` / `14.8 MB` |
-| **Ne** ($Z=10,N=10$) | $2s^2 2p^6$ ($0$) | RHF / `aug-cc-pVTZ` | 46 | 6 | `-128.533272825` | `-128.5470981` (Koga 1999) | `+13.825` | `0.000000` (`0`) | `2.000378` | `415.2 ms` / `22.5 MB` |
-| **Cr** ($Z=24,N=24$) | $[Ar]3d^5 4s^1$ ($6$) | UHF / `def2-SVP` | 31 | 8 | `-1043.197071970` | `-1043.3563760` (Koga 1999 $^7S$) | `+159.3` | `12.000015` (`12.0`) | `2.000203` | `488.9 ms` / `19.0 MB` |
-| **Cr** ($Z=24,N=24$) | $[Ar]3d^5 4s^1$ ($6$) | ROHF / `def2-TZVP` | 45 | 11 | `-1043.334337466` | `-1043.3563760` (Koga 1999 $^7S$) | `+22.0` | `12.000000` (`12.0`) | `2.000017` | `667.0 ms` / `26.0 MB` |
+- **Repository**: `https://github.com/compas/sphf.git` (`MIT` license)
+- **Pinned Revision**: `913991ff361ddb52f05d207c23fd1932d0c960e3`
+- **Compiler & Libraries**: `GNU Fortran (Ubuntu 12.3.0-1ubuntu1~22.04.3) 12.3.0`, `liblapack-dev` / `libblas-dev` (`3.11.0-2`), built cleanly from unmodified upstream Fortran 90 sources (`make -C src`).
+- **Upstream `test_all/run1..8` Reproducibility** (Level-2 B-spline default `h = 0.125, ks = 6, ns = 72`, `scf_tol = 1e-15`):
+  - `test1.log` (`He 1S`, `sha256:5bc9588496e0adb0`): `-2.861679995611798 Ha` (matches `out1`: `-2.861679995612 Ha`)
+  - `test2.log` (`Li 2S`, `sha256:5b7580e699b6e211`): `-7.432726930728180 Ha` (matches `out2`: `-7.432726930728 Ha`)
+  - `test3.log` (`Li 2P`, `sha256:5d12df5141f401ce`): `-2.169854456993815 Ha` (valence/core run matching `out3`)
+  - `test4.log` (`Be 1S`, `sha256:cec84ec9ce700ea9`): `-14.573023168313082 Ha` (matches `out4`)
+  - `test5.log` (`F 2P`, `sha256:38beca6024041314`): `-99.409349386693137 Ha` (matches `out5`)
+  - `test6.log` (`Mg 1S`, `sha256:3a3874bcb165c7bb`): `-199.426751894065177 Ha` (matches `out6`)
+  - `test7.log` (`Ba`, `sha256:977bb60f86a1945b`): `-23094.303666365958634 Ha` (matches `out7`)
+  - `test8.log` (`Hg`, `sha256:4d9a71d2dbe47ce2`): `-23722.104101465029089 Ha` (matches `out8`)
+- **Additional Direct `sphf_scf`/`sphf_all` Executions** (`B 2P` `out_B` `sha256:2f19976205007cc9`: `-24.529060728524`; `C 3P` `out_C_3P` `sha256:e573cc50dd306779`: `-37.688618962962`; `C AV` `out_C_AV` `sha256:40157ef056a19d40`: `-37.659698064875`; `N 4S` `out_N` `sha256:4094804fae031c62`: `-54.400934208503`; `O 3P` `out_O_3P` `sha256:4a8ee6f0fe08cfa3`: `-74.809398470001`; `Ne 1S` `out_Ne` `sha256:aecc2163031110e6`: `-128.547098109350`; `V 4F` `out_V` `sha256:d9ceecbe398514d7`: `-942.884337737238`; `Cr 7S` `out_Cr` `sha256:51768340182651c5`: `-1043.356376285607`).
+- **SPHF Radial/Spline Convergence (`C 3P`)**: `h=0.25, ks=5, ns=40 -> -37.688618752486 Ha`; `h=0.125, ks=6, ns=72 -> -37.688618962962 Ha`; `ks=7, ns=120 -> -37.688618962485 Ha` (`-V/T = 2.00000000000007`).
 
 ---
 
-## 2. Physical Invariants Checked on Every Calculation
+## 2. Matched GTO Basis-Sequence Convergence vs. Direct `compas/sphf` Limits
 
-Across all 18 profiled systems above and automated Vitest cases (`src/physics/__tests__/hartreeFock.test.ts`):
-1. **Energy Decomposition Consistency**: $|E_{\text{tot}} - (T + V_{ne} + J + K)| \le 1.6 \times 10^{-12}\text{ Ha}$ (no double counting).
-2. **One-Electron Self-Interaction Cancellation**: On $\text{H}$ and $\text{He}^+$ ($N=1$), individual $J$ and $K$ satisfy $|J + K| < 10^{-11}\text{ Ha}$, giving $E_{\text{tot}} = \langle \hat{h}_{\text{core}} \rangle \ge -Z^2/2$.
-3. **Overlap Orthonormality & Trace**: $\max |\mathbf{C}^T\mathbf{S}\mathbf{C} - \mathbf{I}| \le 1.6 \times 10^{-14}$ and $|\operatorname{Tr}(\mathbf{P}\mathbf{S}) - N| < 10^{-12}$.
-4. **110-Pt Lebedev Spherical Radial Normalization**: $|\int 4\pi r^2\rho\,dr - N| < 10^{-6}\,e$ and $|\int 4\pi r^2(\rho_\alpha-\rho_\beta)\,dr - 2S| < 10^{-6}\,e$ across every closed and open shell.
-5. **ROHF Orbital vs Koopmans Diagonals (`Li aug-cc-pVTZ`)**: Closed-shell `1s` effective eigenvalue `-2.477798 Ha` matches `compas/sphf` (`-2.477751 Ha`, $\Delta = 4.7 \times 10^{-5}\text{ Ha}$); open-shell `2s` Koopmans diagonal $\langle 2s|\hat{F}^\alpha|2s\rangle = -0.196313\text{ Ha}$ matches `compas/sphf` (`-0.196323 Ha`, $\Delta = 1.0 \times 10^{-5}\text{ Ha}$).
-6. **Negative Control & Error Classifications**:
-   - **Basis incompleteness** (dominant positive $\Delta E$ vs radial CBS limits on `STO-3G` -> `aug-cc-pVTZ` / `def2-TZVP`),
-   - **Spin polarization vs contamination**: UHF allows slight spin polarization ($E_{\text{UHF}}(\text{N}) < E_{\text{ROHF,lim}}(\text{N})$ by `0.23 mHa` with $\langle S^2 \rangle = 3.7576$), whereas ROHF enforces exact $\langle S^2 \rangle = S(S+1)$,
-   - **Hartree–Fock correlation error**: Single-determinant HF inherently omits Coulomb correlation ($\approx 42\text{ mHa}$ in He, $\approx 390\text{ mHa}$ in Ne) — HF energy is variational upper bound on exact non-relativistic single-determinant energy, never exact total atomic energy.
+All GTO runs use point-infinite-mass nonrelativistic HF (`convTol = 1e-10 Ha`, `SO3` symmetry). Differences $\Delta E = E_{\text{GTO}} - E_{\text{SPHF}}$ reflect finite Gaussian basis-set incompleteness rather than solver error:
+
+| System (`2S`, Method) | `compas/sphf` Ref (Ha) | `cc-pVDZ` ($\Delta E$ mHa) | `cc-pVTZ` ($\Delta E$ mHa) | `aug-cc-pVTZ` ($\Delta E$ mHa) | `def2-SVP` ($\Delta E$ mHa) | `def2-TZVP` ($\Delta E$ mHa) | Comparison Type |
+|---|---|---|---|---|---|---|---|
+| **He** (`0`, RHF) | `-2.861679996` (`1S`) | `-2.85516048` (`+6.520`) | `-2.86115334` (`+0.527`) | `-2.86118343` (`+0.497`) | `-2.85516048` (`+6.520`) | `-2.85989543` (`+1.785`) | Direct closed-shell |
+| **Li** (`1`, ROHF) | `-7.432726931` (`2S`) | `-7.43241988` (`+0.307`) | `-7.43267886` (`+0.048`) | `-7.43268212` (`+0.045`) | `-7.42506404` (`+7.663`) | `-7.43265179` (`+0.075`) | Asymptotic (`2S` single $s$) |
+| **Be** (`0`, RHF) | `-14.573023168` (`1S`) | `-14.57233763` (`+0.686`) | `-14.57287347` (`+0.150`) | `-14.57287534` (`+0.148`) | `-14.55372687` (`+19.296`) | `-14.57257987` (`+0.443`) | Direct closed-shell |
+| **B** (`1`, ROHF) | `-24.529060729` (`2P`) | `-24.52656395` (`+2.497`) | `-24.52809762` (`+0.963`) | `-24.52813871` (`+0.922`) | `-24.49755868` (`+31.502`) | `-24.52834156` (`+0.719`) | Asymptotic single det vs $^2P$ |
+| **C** (`2`, ROHF) | `-37.688618963` (`3P`) | `-37.68239129` (`+6.228`) | `-37.68666223` (`+1.957`) | `-37.68677677` (`+1.842`) | `-37.64114338` (`+47.476`) | `-37.68747479` (`+1.144`) | Asymptotic single det vs $^3P$ |
+| **N** (`3`, ROHF) | `-54.400934209` (`4S`) | `-54.38841424` (`+12.520`) | `-54.39735785` (`+3.576`) | `-54.39760952` (`+3.325`) | `-54.33292502` (`+68.009`) | `-54.39917537` (`+1.759`) | Asymptotic half-filled $p^3$ |
+| **O** (`2`, ROHF) | `-74.809398470` (`3P`) | `-74.78749216` (`+21.906`) | `-74.80483711` (`+4.561`) | `-74.80556219` (`+3.836`) | `-74.71504829` (`+94.350`) | `-74.80856253` (`+0.836`) | Asymptotic single det vs $^3P$ |
+| **F** (`1`, ROHF) | `-99.409349387` (`2P`) | `-99.37184174` (`+37.508`) | `-99.40020275` (`+9.147`) | `-99.40121852` (`+8.131`) | `-99.28044990` (`+128.899`) | `-99.40643817` (`+2.911`) | Asymptotic single det vs $^2P$ |
+| **Ne** (`0`, RHF) | `-128.547098109` (`1S`) | `-128.48877555` (`+58.323`) | `-128.53186164` (`+15.236`) | `-128.53327283` (`+13.825`) | `-128.37640681` (`+170.691`) | `-128.54149276` (`+5.605`) | Direct closed-shell |
+| **Cr** (`6`, ROHF) | `-1043.356376286` (`7S`) | `-1043.35499896` (`+1.377`) | `-1043.35568204` (`+0.694`) | `-1043.35569850` (`+0.678`) | `-1043.19704063` (`+159.336`) | `-1043.33433747` (`+22.039`) | Asymptotic half-filled $3d^5 4s^1$ |
+
+*(One-electron exact fixed-nucleus limits also hold cleanly: `He+` UHF/`aug-cc-pVTZ` `-1.994290049 Ha` vs `-2.0 Ha`, $|J+K| < 10^{-11}\text{ Ha}$.)*
+
+---
+
+## 3. Open-Shell Validation Matrix (`Li, B, C, N, O, F, Cr, C+`)
+
+Every run enforces `termSymbol = null`, `totalJ = null`, `lSquaredAvailable = false`, exact `tracePS = N`, and 110-point Lebedev angular anisotropy:
+
+| System | Config (`2S`) | Method / Basis | State Character | $E_{\text{HF}}$ (Ha) | $\operatorname{Tr}(PS)$ | $\langle S^2 \rangle$ | Max Rel. Anisotropy (110-pt) | Spherical? |
+|---|---|---|---|---|---|---|---|---|
+| **Li** ($3,3$) | $1s^2 2s^1$ ($1$) | `rohf` / `aug-cc-pvtz` | `restricted-open-shell-determinant` | `-7.43268212` | `3.000000` | `0.750000` | `2.03e-15` | Yes ($2s^1$ spherical) |
+| **Li** ($3,3$) | $1s^2 2s^1$ | `atom-sph-avg` / `aug-cc-pvtz` | `spherical-ensemble-average` | `-7.37805683` | `3.000000` | `unavailable (null)` | `2.02e-15` | Yes (ensemble) |
+| **B** ($5,5$) | $2s^2 2p^1$ ($1$) | `rohf` / `cc-pvtz` | `restricted-open-shell-determinant` | `-24.52809762` | `5.000000` | `0.750000` | `1.72e+00` | No (oriented $p^1$ det) |
+| **B** ($5,5$) | $2s^2 2p^1$ | `atom-sph-avg` / `cc-pvtz` | `spherical-ensemble-average` | `-24.37809162` | `5.000000` | `unavailable (null)` | `3.03e-15` | Yes (ensemble) |
+| **C** ($6,6$) | $2s^2 2p^2$ ($2$) | `uhf` / `cc-pvtz` | `unrestricted-determinant` | `-37.68792049` | `6.000000` | `2.003342` | `8.88e-01` | No (oriented $p^2$ det) |
+| **C** ($6,6$) | $2s^2 2p^2$ ($2$) | `rohf` / `cc-pvtz` | `restricted-open-shell-determinant` | `-37.68666223` | `6.000000` | `2.000000` | `8.95e-01` | No ($p$-split `1.1e-16 Ha`) |
+| **C** ($6,6$) | $2s^2 2p^2$ | `atom-sph-avg` / `cc-pvtz` | `spherical-ensemble-average` | `-37.33693518` | `6.000000` | `unavailable (null)` | `2.15e-15` | Yes (spin-unpol. ensemble) |
+| **N** ($7,7$) | $2s^2 2p^3$ ($3$) | `rohf` / `cc-pvtz` | `restricted-open-shell-determinant` | `-54.39735785` | `7.000000` | `3.750000` | `5.85e-15` | Yes (half-filled $p^3$) |
+| **O** ($8,8$) | $2s^2 2p^4$ ($2$) | `rohf` / `cc-pvtz` | `restricted-open-shell-determinant` | `-74.80483711` | `8.000000` | `2.000000` | `7.21e-01` | No (oriented $p^4$ det) |
+| **F** ($9,9$) | $2s^2 2p^5$ ($1$) | `rohf` / `cc-pvtz` | `restricted-open-shell-determinant` | `-99.40020275` | `9.000000` | `0.750000` | `5.02e-01` | No (oriented $p^5$ det) |
+| **Cr** ($24,24$) | $[Ar]3d^5 4s^1$ ($6$) | `rohf` / `def2-tzvp` | `restricted-open-shell-determinant` | `-1043.33433747` | `24.000000` | `12.000000` | `8.14e-13` | Yes (half-filled $d^5 s^1$) |
+| **Cr** ($24,24$) | $[Ar]3d^5 4s^1$ | `atom-sph-avg` / `def2-tzvp` | `spherical-ensemble-average` | `-1042.27562257` | `24.000000` | `unavailable (null)` | `2.80e-15` | Yes (curated `atomic_config`) |
+| **$\text{C}^+$** ($6,5$) | $2s^2 2p^1$ | `atom-sph-avg` / `cc-pvtz` | `spherical-ensemble-average` | `-37.05822531` | `5.000000` | `unavailable (null)` | `1.90e-15` | Yes (`atomic_config` cation) |
+
+*Note on `C AV` vs `AtomSphAverageRHF`*: `compas/sphf` configuration average (`C AV`, `-37.659698 Ha`) averages spin-polarized configurations (`3P, 1D, 1S`), whereas PySCF `AtomSphAverageRHF` (`-37.336935 Ha` in `cc-pVTZ`) is a spin-unpolarized $N_\alpha = N_\beta$ fractional ensemble — a contextual comparison only.
+
+---
+
+## 4. Physical Invariants Checked on Every Calculation
+
+Across automated Vitest (`src/physics/__tests__/hartreeFock.test.ts`), Playwright (`tests/browser/hartreeFock.spec.ts`), and lifecycle tests:
+1. **Energy Decomposition Consistency**: $|E_{\text{tot}} - (T + V_{ne} + J + K)| \le 2 \times 10^{-12}\text{ Ha}$.
+2. **Overlap Orthonormality & Trace**: $\max |\mathbf{C}^T\mathbf{S}\mathbf{C} - \mathbf{I}| \le 10^{-10}$ and $|\operatorname{Tr}(\mathbf{P}\mathbf{S}) - N| < 10^{-10}$ (including cation $\text{C}^+$ under `atom-sph-avg`).
+3. **ROHF Orbital vs Koopmans Diagonals (`Li aug-cc-pVTZ`)**: `1s` effective `-2.477798 Ha` vs `compas/sphf -2.477751 Ha`; `2s <Fa>` `-0.196313 Ha` vs `compas/sphf -0.196323 Ha`.
+4. **Negative Controls**: `maxCycle=1` unconverged SCF rejects honestly; `rhf` rejects `2S != 0`; `atom-sph-avg` rejects `N < 2`; non-`point-infinite-mass` models reject for multi-electron HF.

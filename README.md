@@ -14,28 +14,31 @@
 4. **Energy Structure** — Compare Schrödinger $E_n$, Sommerfeld–Dirac $E_{n\kappa}$ fine structure, NIST 1st ionization energies, and reference total HF energies.
 5. **Transitions** — Evaluate NR and Dirac length-gauge E1 selection rules, radial/Wigner matrix elements, polarization channels, oscillator strengths $f_{if}$, and Einstein $A_{fi}$ coefficients.
 6. **Spectroscopy** — Generate discrete vacuum `Lyman`, `Balmer`, `Paschen`, or custom spectra from calculated E1 rates and compare directly against NIST $^1\text{H}$ vacuum centroids (zero empirical broadening).
-7. **Hartree–Fock (`v0.7.0` New)** — Configure neutral or ionic multi-electron atoms (`Z`, `N`, spin excess `2S`), `Curated NIST Ground` / `Aufbau + Hund` / `User Custom` subshell occupations, formalism (`RHF`, `UHF`, `ROHF`, `AtomSphAverageRHF`), pinned BSE basis (`STO-3G`, `6-31G`, `cc-pVDZ`, `cc-pVTZ`, `aug-cc-pVTZ`, `def2-SVP`, `def2-TZVP`), SCF controls (`DIIS`, initial guess, damping, level shift, tolerances, stability), and inspect genuine MO orbitals, `<Fα>/<Fβ>`, `T + V + J + K`, `<S²>`, 110-pt Lebedev radial density, SCF history, and 3D Marching Tetrahedra / 2D slices. Reports offline availability honestly if the Express+PySCF backend is inactive.
+7. **Hartree–Fock (`v0.7.0` New)** — Configure neutral or ionic multi-electron atoms (`Z`, `N`, spin excess `2S`), `Curated NIST Ground` / `Aufbau + Hund` / `User Custom` subshell occupations, cleanly separated methods (`RHF (det)`, `UHF (det)`, `ROHF (det)`, `AtomSphAvg (ensemble)` with explicit unavailability of term-resolved `^{2S+1}L`, `J`, `<L²>`, and `<S²>` on spin-unpolarized ensembles), pinned BSE bases (`STO-3G`..`aug-cc-pVTZ`, `def2-*`), SCF controls, 110-pt Lebedev radial density & angular isotropy checks, and 3D Marching Tetrahedra / 2D slices. Verified against directly built `compas/sphf` (`commit 913991f`, MIT) B-spline benchmarks. Reports offline availability honestly in Static/Viewer mode.
 8. **Analysis** — Inspect 2D XY/XZ/YZ heatmaps (`Slice2DCanvas`) including live PySCF HF 2D slices, radial distributions, analytic $\langle r^k \rangle$ / Dirac spinor moments, and the `118`-element provenance matrix.
 9. **Experiment History** — IndexedDB (`atoms_laboratory_db`) execution ledger supporting cancellation, replay (`loaded-from-store`) vs fresh recomputation (`computed`), and schema-validated JSON import/export (`atoms-experiment-bundle`).
 
 ---
 
-## Setup & Verification Commands
+## Execution Modes & Setup Commands
+
+- **Full Local Scientific Mode (`npm run dev` / `npm start`)**: Express 5 binds to **`127.0.0.1:3000` by default** (override via `--host` / `ATOMS_HOST` for managed containers), validates Host/Origin on `/api/hf/*` (`403` on cross-origin requests), and invokes `.venv/bin/python science/hf_backend.py`. Tested on Linux `x86_64` (Node `22.23.2`, Python `3.11.2`).
+- **Static / Viewer Mode (`vite preview` / static `dist/index.html`)**: Preserves 1-electron analytical solvers and bundled datasets; `/api/hf/capabilities` returns non-JSON, so live Hartree–Fock displays `backend offline` and disables execution cleanly.
 
 ```bash
-# Python scientific backend setup (PySCF 2.15.1 + BSE 0.12 + NumPy + SciPy + h5py)
-bash scripts/setup_python_backend.sh   # or use preinstalled /opt/atoms-py
+# Python scientific backend setup (PySCF 2.15.1 + libcint + BSE 0.12 + NumPy + SciPy + h5py)
+bash scripts/setup_python_backend.sh
 
-npm run dev             # Express 5 + Vite middleware + PySCF API on http://localhost:3000
+npm run dev             # Express 5 + Vite middleware + PySCF API on http://127.0.0.1:3000
 npm run data:build      # SHA-256 verification + NIST/Lobato JSON generation
 npm run data:matrix     # Regenerate docs/ACCURACY_MATRIX.md (118 elements)
 npm run typecheck       # tsc --noEmit -p tsconfig.json
 npm run lint            # TypeScript syntax/type validation
 npm run test:native     # C++17 Debug + Release core tests (340 checks each)
-npm test                # Vitest suite (17 files, 133 tests incl. live PySCF validation)
+npm test                # Vitest suite (incl. live PySCF open-shell matrix & C++ parity)
 npm run build           # Vite production single-file bundle + inline Web Workers
-npm start               # Production Express server serving dist/ + /api/hf/* on port 3000
-npm run test:browser    # Playwright full-stack Chromium + WebGL2 + PySCF tests (23 tests)
+npm start               # Production Express server serving dist/ + /api/hf/* on http://127.0.0.1:3000
+npm run test:browser    # Playwright full-stack Chromium + WebGL2 + PySCF tests
 ```
 
 ---

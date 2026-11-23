@@ -2,23 +2,24 @@
 
 All notable changes to **ATOMS** are documented in this file.
 
-## [0.7.0] — 2026-11-21 (Multi-Electron Atomic Structure)
+## [0.7.0] — 2026-11-22 (Multi-Electron Atomic Structure)
 
 ### Added
 - **Live Multi-Electron Hartree–Fock Backend (`science/hf_backend.py`, `server.ts`, `scripts/setup_python_backend.sh`)**:
-  - Integrated **PySCF `2.15.1` + bundled `libcint` + Basis Set Exchange `0.12`** behind an Express 5 localhost API (`GET /api/hf/capabilities`, `POST /api/hf/calculate`) serving Vite middleware in dev (`tsx server.ts`) and `dist/` in production (`node server.ts`).
-  - Supports nonrelativistic fixed point-infinite-mass **`RHF`**, **`UHF`**, **`ROHF`** (with `SO(3)` spherical symmetry mapping plus explicit Roothaan `<Fα>`/`<Fβ>` Koopmans orbital expectations), and **`AtomSphAverageRHF`**.
-  - Upgraded sphericalized radial density & spin-density quadrature to **PySCF `110`-point Lebedev** angular quadrature (`intN = N` and `intSpin = 2S` to `~1e-8 e` even on open-shell nonspherical atoms like `C 2p²`) plus real 3D Cartesian GTO volumetric evaluation (`mo-signed`, `mo-density`, `total-density`, `spin-density`).
-  - Implemented process-level cancellation (`SIGTERM` on HTTP abort/close) and honest `503` offline unavailability reporting without mock fallbacks.
+  - Integrated **PySCF `2.15.1` + bundled `libcint` + Basis Set Exchange `0.12`** behind an Express 5 local API (`GET /api/hf/capabilities`, `POST /api/hf/calculate`) serving Vite middleware in dev (`tsx server.ts`) and `dist/` in production (`node server.ts`).
+  - Hardened local runtime: binds to **`127.0.0.1` by default** (overridable via `--host` / `--port` / `ATOMS_HOST` for managed containers), enforces strict Host/Origin validation (`403 FORBIDDEN_ORIGIN`, zero wildcard CORS), inspects `EADDRINUSE` owning sockets read-only without killing unrelated processes, reaps spawned Python children + Vite cleanly on `SIGINT`/`SIGTERM`, and verifies Node/Python/Express + He smoke test inside `scripts/setup_python_backend.sh`.
+  - Supports nonrelativistic fixed point-infinite-mass **`RHF`**, **`UHF`**, **`ROHF`** (with `SO(3)` spherical symmetry mapping plus explicit Roothaan `<Fα>`/`<Fβ>` Koopmans orbital expectations), and **`AtomSphAverageRHF`** (with `N >= 2` guard and explicit `mf.atomic_configuration` override fixing cations like `C+` and curated `Cr 3d5 4s1`).
+  - Separates determinant states vs. spherical-ensemble averages (`stateInfo.stateCharacter`), reports honest unavailability of term-resolved `^{2S+1}L`, relativistic `J`, `<L²>`, and ensemble `<S²>` (`spinDiagnostics.available = false`), and adds 110-point Lebedev angular isotropy + `SO(3)` subshell degeneracy diagnostics.
+  - Implements process-level cancellation (`SIGTERM -> SIGKILL` on HTTP abort/close) and honest static/offline reporting (`backend offline`) without mock fallbacks.
 - **TypeScript Domain, Provider, Numerics & Experiment Integration**:
-  - Added `src/physics/hf/` (`types.ts`, `basisCatalog.ts` auditing `STO-3G`, `6-31G`, `cc-pVDZ`, `cc-pVTZ`, `aug-cc-pVTZ`, `def2-SVP`, `def2-TZVP` with `K=19`/`Ca=20` BSE gaps and `def2` ECP `Z>=37` cap, `configurations.ts`, `benchmarks.ts` pinning `compas/sphf` MIT / Koga–Thakkar 1999 / exact `-Z²/2`, `transport.ts` with `blob:` Web-Worker origin resolution).
-  - Registered `pyscfLiveProvider` (`pyscf-hf-live`, `0.7.0`) enforcing point-infinite-mass Hamiltonian, `2S=0` for RHF, BSE element coverage, unconverged SCF rejection, and 5 post-SCF validation checks.
+  - Added `src/physics/hf/` (`types.ts`, `basisCatalog.ts` auditing `STO-3G`, `6-31G`, `cc-pVDZ`, `cc-pVTZ`, `aug-cc-pVTZ`, `def2-SVP`, `def2-TZVP` with `K=19`/`Ca=20` BSE gaps and `def2` ECP `Z>=37` cap, `configurations.ts`, `benchmarks.ts` anchored against directly compiled/executed `compas/sphf` commit `913991f` & exact `-Z²/2`, `transport.ts` with `blob:` Web-Worker origin resolution).
+  - Registered `pyscfLiveProvider` (`pyscf-hf-live`, `0.7.0`) enforcing point-infinite-mass Hamiltonian, `2S=0` for RHF, `N>=2` for `atom-sph-avg`, BSE element coverage, unconverged SCF rejection, and 6 post-SCF validation checks (including spherical-ensemble isotropy).
   - Added `MultiElectronHFState` (`src/domain/quantum/index.ts`), `multi-electron-hf` experiment schema/registry kind (`src/experiments/`), and `extractIsosurfacesFromVolumeGrid` / `slice2DFromVolumeGrid` (`src/numerics/isosurface/marchingTetrahedra.ts`).
 - **Hartree–Fock Laboratory UI (`HartreeFockWorkspace.tsx`, `App.tsx`, `AnalysisWorkspace.tsx`, `WorkspaceNav.tsx`)**:
-  - Added the 9th laboratory tab (`Hartree–Fock`) with subshell $(\alpha,\beta)$ editing, basis/method/SCF controls, orbital & `<Fα>/<Fβ>` table, `T+V+J+K` energy breakdown, SCF history, radial plots, Workbench 3D Marching Tetrahedra projection, Analysis 2D slice integration, and IndexedDB replay/recompute.
+  - Added the 9th laboratory tab (`Hartree–Fock`) with subshell $(\alpha,\beta)$ editing, explicitly separated `RHF (det)` / `UHF (det)` / `ROHF (det)` / `AtomSphAvg (ensemble)` cards, unavailable term-resolved multiplet/`J`/`<L²>` disclosure, 110-pt Lebedev angular isotropy readout, orbital & `<Fα>/<Fβ>` table, `T+V+J+K`, SCF history, Workbench 3D Marching Tetrahedra, Analysis 2D slice integration, and IndexedDB replay/recompute.
 - **Validation & Documentation**:
-  - Added `src/physics/__tests__/hartreeFock.test.ts` (7 live PySCF + Worker/IndexedDB suites) and `tests/browser/hartreeFock.spec.ts` (2 full-stack Playwright tests).
-  - Delivered 6 focused HF docs (`SOLVER_ECOSYSTEM_AUDIT.md`, `MULTI_ELECTRON_HARTREE_FOCK.md`, `BASIS_SETS.md`, `SCF_CONVERGENCE.md`, `ORBITALS_AND_DENSITY.md`, `MULTI_ELECTRON_VALIDATION.md`) and updated project documentation to `0.7.0`.
+  - Verified direct upstream `compas/sphf` build (`gfortran 12.3.0`) and `test_all` + open-shell B-spline runs; expanded `src/physics/__tests__/hartreeFock.test.ts` (8 suites incl. `Li, B, C, N, O, F, Cr, C+` matrix — **134 Vitest tests** total), `tests/browser/hartreeFock.spec.ts` (4 Playwright tests — **25 browser tests** total), **340** C++17 Debug/Release checks, and lifecycle/static-mode verification.
+  - Synchronized HF, scope, user/developer, validation, and release documentation to final `v0.7.0`.
 
 ---
 

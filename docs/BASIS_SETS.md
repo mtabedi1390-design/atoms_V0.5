@@ -36,12 +36,15 @@ Every element coverage limit below was **verified directly against `basis_set_ex
 ### Why `def2-*` is Strictly Capped at `Z = 36`
 Direct inspection of `basis_set_exchange.get_basis(name, elements=[Z], fmt="json")` in BSE `0.12` shows `ecp_potentials` appearing at $Z = 37$ (`Rb`) through $Z = 86$ (`Rn`) for `def2-svp` and `def2-tzvp`. Loading BSE/PySCF Gaussian valence basis functions for $Z \ge 37$ without attaching their accompanying ECPs produces unphysical all-electron variational collapse. Both `science/hf_backend.py` and `src/physics/hf/basisCatalog.ts` enforce `allElectronMaxZ = 36` on `def2-*`.
 
+### 3. Finite GTO Basis Incompleteness vs. Radial B-Spline HF Limits
+Gaussian-Type Orbital (GTO) contractions cannot strictly satisfy Kato's electron–nucleus cusp condition ($r \to 0$) or asymptotic exponential tail decay at finite $\zeta$-level (`cc-pVDZ -> cc-pVTZ -> aug-cc-pVTZ`, `def2-SVP -> def2-TZVP`). Comparisons against numerical 1D B-spline HF (`compas/sphf`, commit `913991f`) show positive GTO basis-incompleteness offsets ($\sim +0.05\text{ to }+14\text{ mHa}$ at triple-$\zeta$ for `He..Ne`, `+0.68 mHa` for `Cr` in `aug-cc-pVTZ`), cleanly separated from SCF solver accuracy.
+
 ---
 
-## 3. Provenance Recorded Per Calculation
+## 4. Provenance Recorded Per Calculation
 
 Every stored `ExperimentResultRecord` captures:
 - Exact basis identifier (`basis`) and BSE provenance string (`BSE v0.12 (<bseName> v1)`),
-- Spherical harmonic convention and AO basis count (`aoCount`),
+- Spherical harmonic convention (`5d, 7f, 9g`) and AO basis count (`aoCount`),
 - PySCF `2.15.1` (`Apache-2.0`) + `libcint` + `basis-set-exchange 0.12` (`BSD-3-Clause`) provenance metadata,
 - Pinned `CODATA-2018` conversion constants (`1 Ha = 27.211386245988 eV`).

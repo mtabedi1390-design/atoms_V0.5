@@ -2,12 +2,13 @@
 
 All notable changes to **ATOMS** are documented in this file. See also [`../CHANGELOG.md`](../CHANGELOG.md).
 
-## [0.7.0] — 2026-11-21 (Multi-Electron Atomic Structure)
+## [0.7.0] — 2026-11-22 (Multi-Electron Atomic Structure)
 
-- Integrated live **PySCF `2.15.1` + `libcint` + Basis Set Exchange `0.12`** multi-electron Hartree–Fock (`RHF`, `UHF`, `ROHF`, `AtomSphAverageRHF`) via Express 5 localhost API (`/api/hf/capabilities`, `/api/hf/calculate`) and `pyscf-hf-live` (`0.7.0`) provider inside the existing `ExperimentRunner` / Web Worker / IndexedDB platform.
-- Enforced honest scientific boundaries: fixed point-infinite-mass non-relativistic nuclear model only, `RHF` restricted to `2S=0`, pinned BSE `v1` element masks (`K=19`/`Ca=20` Dunning exclusions and `def2` ECP cap `Z<=36`), 110-pt Lebedev radial integration, unconverged SCF failure rejection, and zero offline fabrication.
-- Added `HartreeFockWorkspace` (9th laboratory tab), real 3D GTO volumetric Marching Tetrahedra projection into Workbench, and Analysis 2D slice integration.
-- **Verification**: 17 Vitest suites (**133 tests**), **340** C++17 native checks (Debug + Release), **23** Playwright full-stack browser tests, and 18 live PySCF empirical benchmark profiles (`H..Cr`).
+- Integrated live **PySCF `2.15.1` + `libcint` + Basis Set Exchange `0.12`** multi-electron Hartree–Fock (`RHF (det)`, `UHF (det)`, `ROHF (det)`, `AtomSphAvg (ensemble)`) via Express 5 API (`/api/hf/capabilities`, `/api/hf/calculate`, `127.0.0.1` loopback default with `--host`/`--port` overrides, Host/Origin `403` protection, `EADDRINUSE` diagnostics, and clean child reaping) and `pyscf-hf-live` (`0.7.0`) provider.
+- Corrected open-shell & atomic-state semantics: distinguished determinants vs fractional `AtomSphAverageRHF` ensembles (`atomic_configuration` override for ions like `C+` and `Cr 3d5 4s1`, `N>=2` guard, `spinDiagnostics.available = false`), explicitly reported `termSymbol`, `totalJ`, and `lSquared` unavailable rather than fabricating terms, and added 110-pt Lebedev angular isotropy + `SO(3)` subshell degeneracy diagnostics.
+- Directly built and executed upstream **`compas/sphf`** (`commit 913991ff361ddb52f05d207c23fd1932d0c960e3`, MIT, `gfortran 12.3.0`) for matched B-spline vs GTO basis-sequence comparisons across `He..Ne` and `V 4F`/`Cr 7S`.
+- Added `HartreeFockWorkspace` (9th laboratory tab), real 3D GTO volumetric Marching Tetrahedra projection into Workbench, Analysis 2D slice integration, and honest Static/Viewer offline mode (`backend offline`).
+- **Verification**: 17 Vitest suites (**134 tests** incl. `Li, B, C, N, O, F, Cr, C+` open-shell matrix), **340** C++17 native checks (Debug + Release), **25** Playwright full-stack browser tests, isolated `.venv` setup check, server lifecycle/restart/stop checks, and static HTML fallback checks.
 
 ## [0.6.1] — 2026-11-21 (Scientific Stabilization)
 

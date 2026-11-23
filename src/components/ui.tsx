@@ -61,7 +61,15 @@ export function Toggle({ label, checked, onChange }: { label: string; checked: b
   );
 }
 
-export function Badge({ kind, children }: { kind: "measured" | "evaluated" | "predicted" | "unavailable" | "exact" | "estimate"; children: ReactNode }) {
+export function Badge({
+  kind,
+  children,
+  "data-testid": testId,
+}: {
+  kind: "measured" | "evaluated" | "predicted" | "unavailable" | "exact" | "estimate";
+  children: ReactNode;
+  "data-testid"?: string;
+}) {
   const c: Record<string, string> = {
     measured: "border-emerald-700 text-emerald-300",
     evaluated: "border-sky-700 text-sky-300",
@@ -70,5 +78,9 @@ export function Badge({ kind, children }: { kind: "measured" | "evaluated" | "pr
     exact: "border-emerald-700 text-emerald-300",
     estimate: "border-amber-700 text-amber-300",
   };
-  return <span className={cn("rounded-sm border px-1 py-px text-[9px] uppercase tracking-wide", c[kind])}>{children}</span>;
+  return (
+    <span data-testid={testId} className={cn("rounded-sm border px-1 py-px text-[9px] uppercase tracking-wide", c[kind])}>
+      {children}
+    </span>
+  );
 }
