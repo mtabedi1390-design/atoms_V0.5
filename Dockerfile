@@ -6,7 +6,8 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --no-audit --no-fund
 
-COPY tsconfig.json vite.config.ts index.html firebase-applet-config.json firebase-blueprint.json ./
+COPY tsconfig.json vite.config.ts index.html firebase-blueprint.json ./
+COPY public ./public
 COPY src ./src
 
 RUN npm run typecheck && npm run build
