@@ -9,7 +9,7 @@ RUN npm install --no-audit --no-fund && npm install firebase --no-audit --no-fun
 COPY tsconfig.json vite.config.ts index.html firebase-blueprint.json ./
 COPY public ./public
 COPY src ./src
-RUN echo '{"apiKey":"","authDomain":"","projectId":"","storageBucket":"","messagingSenderId":"","appId":"","firestoreDatabaseId":"(default)"}' > firebase-applet-config.json
+RUN echo '{"apiKey":"AIzaSyDummyKeyForLocalRun1234567890","authDomain":"://firebaseapp.com","projectId":"atoms-lab","storageBucket":"://appspot.com","messagingSenderId":"123456789","appId":"1:123456789:web:abcdef123456","firestoreDatabaseId":"(default)"}' > firebase-applet-config.json
 
 RUN npm run typecheck && npm run build
 
