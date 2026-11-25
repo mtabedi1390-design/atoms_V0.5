@@ -30,5 +30,8 @@ test("Firebase Authentication UI & Cloud Sync panel initialize cleanly without c
     page.getByText(/All quantum solvers and IndexedDB persistence work offline/),
   ).toBeVisible();
 
+  // Wait beyond Firestore's 10s OnlineStateTracker timeout to verify zero backend timeout / offline errors
+  await page.waitForTimeout(11000);
+
   expect(errors).toEqual([]);
 });
