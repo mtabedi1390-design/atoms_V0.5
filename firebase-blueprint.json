@@ -121,7 +121,8 @@
             "e1-transition",
             "spectroscopy-series",
             "multi-electron-hf",
-            "ls-term-ci"
+            "ls-term-ci",
+            "electron-correlation"
           ]
         },
         "providerId": {
@@ -234,6 +235,7 @@
             "spectroscopy",
             "hartree-fock",
             "atomic-terms",
+            "electron-correlation",
             "analysis",
             "experiment-history"
           ]

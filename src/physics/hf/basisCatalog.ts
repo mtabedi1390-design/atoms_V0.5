@@ -11,7 +11,7 @@
  *    Z=36 here because Z >= 37 requires Effective Core Potentials (ECP),
  *    which are out of scope for all-electron HF in ATOMS v0.7.0.
  */
-import type { HFBasisId, HFCapabilitiesResponse } from "./types";
+import type { HFBasisId } from "./types";
 
 export interface HFBasisCatalogEntry {
   readonly id: HFBasisId;
@@ -148,7 +148,10 @@ export function getBasisCatalogEntry(basis: HFBasisId): HFBasisCatalogEntry {
 export function isBasisSupportedForZ(
   basis: HFBasisId,
   Z: number,
-  liveCapabilities?: HFCapabilitiesResponse | null,
+  liveCapabilities?: {
+    readonly available?: boolean;
+    readonly bases?: readonly { readonly id: HFBasisId; readonly elements: readonly number[] }[];
+  } | null,
 ): { readonly supported: boolean; readonly reason?: string } {
   const meta = getBasisCatalogEntry(basis);
   if (Z > meta.allElectronMaxZ) {

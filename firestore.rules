@@ -50,6 +50,7 @@ service cloud.firestore {
         'spectroscopy',
         'hartree-fock',
         'atomic-terms',
+        'electron-correlation',
         'analysis',
         'experiment-history'
       ];
@@ -63,7 +64,8 @@ service cloud.firestore {
         'e1-transition',
         'spectroscopy-series',
         'multi-electron-hf',
-        'ls-term-ci'
+        'ls-term-ci',
+        'electron-correlation'
       ];
     }
 

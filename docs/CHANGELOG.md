@@ -2,6 +2,13 @@
 
 All notable changes to **ATOMS** are documented in this file. See also [`../CHANGELOG.md`](../CHANGELOG.md).
 
+## [0.7.2] — 2026-11-25 (Post-Hartree–Fock Electron Correlation)
+
+- Implemented real post-Hartree–Fock **Electron Correlation** (`science/correlation_backend.py`, `/api/correlation/capabilities`, `/api/correlation/calculate`) powered by **PySCF `2.15.1` + `libcint` + Basis Set Exchange `0.12`**: `RMP2`, `UMP2`, `ROMP2`, `RCISD`, `UCISD`, and bounded Direct `FCI` / `CASCI` (`none` vs `noble-core`, multi-root `fix_spin_`, `direct_uhf` overlap-corrected `<S²>`).
+- Enforced domain, UI, API, and Python guardrails: rejects `AtomSphAverageRHF` fractional ensembles, rejects `ROHF + CISD` (PySCF silent `UCISD` conversion), adds HF-seed `[1, 0, ...]` retry in `_solve_cisd` (fixing BSE `Li/cc-pVDZ UCISD`), checks `|E_total - (E_HF + E_corr)| < 1e-9 Ha`, enforces pre-allocation limits (`N_det <= 200,000`, `CISD dim <= 2,000,000`), and clarifies determinant spaces are not `<L²>`-resolved LS-CSFs.
+- Integrated `ElectronCorrelationState`, `pyscfCorrelationProvider`, Firebase `"electron-correlation"` schema/rules (`DeployRules` deployed), and the **Electron Correlation** tab (`ElectronCorrelationWorkspace.tsx`) with preflight dimension estimator, Matched Cross-Method Comparison table, Worker execution, IndexedDB replay, and honest offline reporting.
+- Verified with `10` Python correlation `unittest` checks (`He`, `Li`, `Be`, `B`, `Ne`, and `He2/6-31G` at 100 Bohr size-extensivity test), Vitest integration tests (`correlation.test.ts`), and Playwright E2E browser tests (`correlation.spec.ts`).
+
 ## [0.7.1] — 2026-11-23 (Atomic Term Structure & LS-Coupled Multiconfiguration CI)
 
 - Audited CompAS/academic (`ATSP2K`, `atsp`, `atsp-book`, `spmchf`, `sphf`) and PySCF modules (`docs/ATOMIC_LS_SOLVER_AUDIT.md`) and implemented **Fixed-Orbital LS-Coupled Multiconfiguration CI** (`science/ls_ci_backend.py` + `src/physics/ls/`) mounted at `GET /api/ls/capabilities` & `POST /api/ls/calculate` alongside preserved `/api/hf/*`.

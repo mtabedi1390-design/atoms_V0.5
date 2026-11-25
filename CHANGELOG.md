@@ -2,6 +2,21 @@
 
 All notable changes to **ATOMS** are documented in this file.
 
+## [0.7.2] — 2026-11-25 (Post-Hartree–Fock Electron Correlation: MP2, CISD, FCI)
+
+### Added
+- **PySCF Post-HF Electron Correlation Backend (`science/correlation_backend.py`, `science/test_correlation_backend.py`)**:
+  - Implemented real local PySCF `2.15.1` correlation calculations across `RMP2` (`mp.MP2`), `UMP2` (`mp.UMP2`), `ROMP2` (`mp.ROMP2` with semi-canonicalized `e_corr_singles`), `RCISD` (`ci.RCISD`), `UCISD` (`ci.UCISD` with explicit HF-seed `[1, 0, ...]` retry preventing Davidson excited-root jumps such as BSE `Li/cc-pVDZ`), and bounded direct `FCI`/`CASCI` (`fci.FCI`, `mcscf.CASCI` fixing 5-tuple index-2 `fcivec` extraction & `np.all` multi-root convergence checks, `fci.direct_uhf` with overlap-corrected `<S²>`).
+  - Enforced strict scientific guardrails: rejects `AtomSphAverageRHF` fractional ensembles, rejects `ROHF + CISD` (preventing PySCF silent `ROHF -> UCISD` conversion), blocks pre-allocation oversized determinant/CISD spaces (`N_det > 200,000`, `CISD dim > 2,000,000`, `nRoots > 5`), computes MP2 denominator gap warnings, and checks `|E_total - (E_HF + E_corr)| < 1e-9 Ha`.
+- **Express Local API (`server.ts`)**:
+  - Added `GET /api/correlation/capabilities` and `POST /api/correlation/calculate` behind `validateLocalApiOrigin`, bounded concurrency queue (`maxConcurrent=1`, `maxQueue=6`, `120s` timeout), client-abort termination, sanitized error messages, and `422 RESOURCE_LIMIT_EXCEEDED` for preflight cap rejections.
+- **TypeScript Domain, Catalog, Provider, Firebase & `Electron Correlation` Workspace**:
+  - Added `src/physics/correlation/` (`types.ts`, `catalog.ts` with exact `SPATIAL_ORBITAL_TABLE` & client preflight estimator, `benchmarks.ts`, `transport.ts`), `ElectronCorrelationState` (`src/domain/quantum`), `pyscfCorrelationProvider` (`src/physics/providers/correlation`), `"electron-correlation"` schema & Firebase rules (`firestore.rules` + deployed rules), and 11th UI tab `ElectronCorrelationWorkspace.tsx` featuring Matched Cross-Method Comparison tables and honest offline reporting.
+- **Validation & Documentation**:
+  - Added 10 Python scientific tests (`science/test_correlation_backend.py` incl. `He2/6-31G` at 100 Bohr proving exact `MP2`/`FCI` size-extensivity vs `+1.2885e-4 Ha` RCISD non-size-extensivity defect), `src/physics/__tests__/correlation.test.ts`, `tests/browser/correlation.spec.ts`, and `docs/ELECTRON_CORRELATION_*.md`; updated version metadata (`package.json`, `index.html`, docs) to `0.7.2`.
+
+---
+
 ## [0.7.1] — 2026-11-23 (Atomic Term Structure & LS-Coupled Multiconfiguration CI)
 
 ### Added

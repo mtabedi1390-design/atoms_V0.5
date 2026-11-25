@@ -97,6 +97,16 @@ const BUILTIN_EXPERIMENT_DESCRIPTORS: readonly ExperimentKindDescriptor[] = [
     defaultObservables: ["ls-term-ci", "ls-term-enumeration", "total-energy"],
     implementedInCurrentRelease: true,
   },
+  {
+    kind: "electron-correlation",
+    label: "Post-HF Electron Correlation (MP2 / CISD / FCI)",
+    description: "Wavefunction electron correlation beyond Hartree–Fock via PySCF RMP2/UMP2/ROMP2, RCISD/UCISD, and bounded iterative Full CI.",
+    minStates: 1,
+    maxStates: 1,
+    requiresTransition: false,
+    defaultObservables: ["electron-correlation", "total-energy", "scf-diagnostics"],
+    implementedInCurrentRelease: true,
+  },
 ];
 
 export class ExperimentRegistry {

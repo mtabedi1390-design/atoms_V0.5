@@ -18,6 +18,7 @@ import {
   type NuclearModel,
 } from "@/domain/atomic";
 import {
+  createElectronCorrelationState,
   createLSTermCIState,
   createMultiElectronHFState,
   createNonRelativisticState,
@@ -69,6 +70,18 @@ import {
   type SubshellOccupancySpec,
 } from "@/physics/ls";
 import { LS_TERM_CI_PROVIDER_ID, LS_TERM_CI_PROVIDER_VERSION } from "@/physics/providers/lsTermCi";
+import {
+  probeCorrelationCapabilities,
+  type CorrelationCapabilitiesResponse,
+  type CorrelationMethodId,
+  type CorrelationOptions,
+  type CorrelationReferenceMethod,
+  type FrozenCoreMode,
+} from "@/physics/correlation";
+import {
+  PYSCF_CORRELATION_PROVIDER_ID,
+  PYSCF_CORRELATION_PROVIDER_VERSION,
+} from "@/physics/providers/correlation";
 import type { DiracComponentView } from "@/workers/visualization.worker";
 
 export type WorkspaceId =
@@ -80,6 +93,7 @@ export type WorkspaceId =
   | "spectroscopy"
   | "hartree-fock"
   | "atomic-terms"
+  | "electron-correlation"
   | "analysis"
   | "experiment-history";
 
@@ -257,6 +271,9 @@ export function useAtomsLaboratory(
   const [hfProbing, setHfProbing] = useState<boolean>(false);
   const [lsCapabilities, setLsCapabilities] = useState<LSCapabilitiesResponse | null>(null);
   const [lsProbing, setLsProbing] = useState<boolean>(false);
+  const [correlationCapabilities, setCorrelationCapabilities] =
+    useState<CorrelationCapabilitiesResponse | null>(null);
+  const [correlationProbing, setCorrelationProbing] = useState<boolean>(false);
   const [hfWorkbenchOverlay, setHfWorkbenchOverlay] = useState<HFWorkbenchOverlay | null>(null);
   const activeHandles = useRef(new Map<string, { cancel: (reason?: string) => void }>());
 
@@ -282,10 +299,22 @@ export function useAtomsLaboratory(
     }
   }, []);
 
+  const refreshCorrelationCapabilities = useCallback(async (refresh = false) => {
+    setCorrelationProbing(true);
+    try {
+      const cap = await probeCorrelationCapabilities(undefined, refresh);
+      setCorrelationCapabilities(cap);
+      return cap;
+    } finally {
+      setCorrelationProbing(false);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshHFCapabilities();
     void refreshLSCapabilities(false);
-  }, [refreshHFCapabilities, refreshLSCapabilities]);
+    void refreshCorrelationCapabilities(false);
+  }, [refreshHFCapabilities, refreshLSCapabilities, refreshCorrelationCapabilities]);
 
   const refreshStore = useCallback(async () => {
     const store = storeRef.current;
@@ -581,6 +610,76 @@ export function useAtomsLaboratory(
     [submitExperiment],
   );
 
+  const runElectronCorrelationExperiment = useCallback(
+    async (params: {
+      readonly Z: number;
+      readonly N: number;
+      readonly spin2S: number;
+      readonly basis: HFBasisId;
+      readonly referenceMethod: CorrelationReferenceMethod;
+      readonly correlationMethod: CorrelationMethodId;
+      readonly frozenCoreMode: FrozenCoreMode;
+      readonly nRoots: number;
+      readonly fixSpin: boolean;
+      readonly scfOptions?: HFSCFOptions;
+      readonly correlationOptions?: CorrelationOptions;
+    }) => {
+      const iso = defaultIsotopeForZ(params.Z);
+      const corrSystem = createAtomicSystem({
+        Z: params.Z,
+        N: params.N,
+        massNumber: iso.massNumber,
+        nuclearModel: createNuclearModelForIsotope("point-infinite-mass", iso),
+      });
+      const corrState = createElectronCorrelationState({
+        N: params.N,
+        spin2S: params.spin2S,
+        basis: params.basis,
+        referenceMethod: params.referenceMethod,
+        correlationMethod: params.correlationMethod,
+        frozenCoreMode: params.frozenCoreMode,
+        nRoots: params.nRoots,
+        fixSpin: params.fixSpin,
+        scfOptions: params.scfOptions,
+        correlationOptions: params.correlationOptions,
+      });
+
+      const methodCaps =
+        params.correlationMethod === "fci"
+          ? (["full-ci"] as const)
+          : params.correlationMethod.includes("cisd")
+            ? (["cisd-ci"] as const)
+            : (["mp2-perturbation"] as const);
+      const chargeTag =
+        corrSystem.q === 0 ? "" : corrSystem.q > 0 ? `+${corrSystem.q}` : `${corrSystem.q}`;
+      const frozenTag = params.frozenCoreMode === "noble-core" ? " [FC]" : "";
+      const def = createExperimentDefinition({
+        kind: "electron-correlation",
+        title: `${corrSystem.species.symbol}${chargeTag} ${params.referenceMethod.toUpperCase()}/${params.correlationMethod.toUpperCase()} (${params.basis}${frozenTag})`,
+        system: corrSystem,
+        quantumStates: [corrState],
+        providerId: PYSCF_CORRELATION_PROVIDER_ID,
+        providerVersion: PYSCF_CORRELATION_PROVIDER_VERSION,
+        observables: ["electron-correlation", "total-energy", "scf-diagnostics", ...methodCaps],
+        modelParameters: {
+          basis: params.basis,
+          referenceMethod: params.referenceMethod,
+          correlationMethod: params.correlationMethod,
+          frozenCoreMode: params.frozenCoreMode,
+          spin2S: params.spin2S,
+          fixSpin: params.fixSpin,
+        },
+        numericalParameters: {
+          nRoots: params.nRoots,
+          scfConvTol: params.scfOptions?.convTol ?? 1e-10,
+          scfMaxCycle: params.scfOptions?.maxCycle ?? 100,
+        },
+      });
+      return submitExperiment(def);
+    },
+    [submitExperiment],
+  );
+
   const cancelExecution = useCallback((executionId: string) => {
     activeHandles.current.get(executionId)?.cancel("Cancelled from ATOMS Laboratory UI");
   }, []);
@@ -691,15 +790,19 @@ export function useAtomsLaboratory(
     hfProbing,
     lsCapabilities,
     lsProbing,
+    correlationCapabilities,
+    correlationProbing,
     hfWorkbenchOverlay,
     setHfWorkbenchOverlay,
     refreshHFCapabilities,
     refreshLSCapabilities,
+    refreshCorrelationCapabilities,
     runSingleStateExperiment,
     runTransitionExperiment,
     runSpectroscopyExperiment,
     runHartreeFockExperiment,
     runLSTermCIExperiment,
+    runElectronCorrelationExperiment,
     cancelExecution,
     replayStoredExperiment,
     rerunStoredExperiment,

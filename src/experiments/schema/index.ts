@@ -25,7 +25,8 @@ export type ExperimentKind =
   | "e1-transition"
   | "spectroscopy-series"
   | "multi-electron-hf"
-  | "ls-term-ci";
+  | "ls-term-ci"
+  | "electron-correlation";
 
 export type ExperimentStatus =
   | "queued"

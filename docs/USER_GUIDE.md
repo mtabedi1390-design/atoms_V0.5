@@ -1,13 +1,13 @@
-# ATOMS v0.7.1 — User Guide
+# ATOMS v0.7.2 — User Guide
 
-**ATOMS Laboratory (`v0.7.1`)** integrates **10 synchronized workspaces** inside one client-local scientific application, combining exact 1-electron analytical solvers (`v0.6.1`), live multi-electron Hartree–Fock (`v0.7.0`), and Russell–Saunders Atomic Term Structure & Fixed-Orbital $LS$-Coupled CI (`v0.7.1`).
+**ATOMS Laboratory (`v0.7.2`)** integrates **11 synchronized workspaces** inside one client-local scientific application, combining exact 1-electron analytical solvers (`v0.6.1`), live multi-electron Hartree–Fock (`v0.7.0`), Russell–Saunders Atomic Term Structure & Fixed-Orbital $LS$-Coupled CI (`v0.7.1`), and **Post-Hartree–Fock Electron Correlation (`v0.7.2`)**.
 
 ---
 
 ## 1. Execution Modes (`Full Local Scientific Mode` vs. `Static / Viewer Mode`)
 
-- **Full Local Scientific Mode (`npm run dev` or `npm start`)**: Starts the local Express 5 + Python `.venv` server (`127.0.0.1:3000` by default). Enables all live Hartree–Fock (`/api/hf/*`) and Fixed-Orbital $LS$-CI (`/api/ls/*`) calculations.
-- **Static / Viewer Mode (`dist/index.html` / `vite preview`)**: Runs client-side 1-electron Schrödinger/Dirac solvers, Russell–Saunders client-side term enumeration, E1 spectroscopy, and bundled datasets; **Hartree–Fock and LS-CI explicitly report `backend offline`** and disable solver execution rather than fabricating results.
+- **Full Local Scientific Mode (`npm run dev` or `npm start`)**: Starts the local Express 5 + Python `.venv` server (`127.0.0.1:3000` by default). Enables all live Hartree–Fock (`/api/hf/*`), Fixed-Orbital $LS$-CI (`/api/ls/*`), and Post-HF Correlation (`/api/correlation/*`) calculations.
+- **Static / Viewer Mode (`dist/index.html` / `vite preview`)**: Runs client-side 1-electron Schrödinger/Dirac solvers, Russell–Saunders client-side term enumeration, E1 spectroscopy, and bundled datasets; **Hartree–Fock, LS-CI, and Electron Correlation explicitly report `Offline / Unavailable`** and disable solver execution rather than fabricating results.
 
 ---
 
@@ -32,10 +32,13 @@
    - Inspect live client-side Russell–Saunders term enumeration ($^{2S+1}L^\pi$, count, unsplit allowed $J$ ranges, Racah seniority $v$ / coupling parentage) and click any term row to select the target $(L, S, \Pi)$ symmetry block.
    - Configure basis (`STO-3G` .. `aug-cc-pVTZ`, `def2-SVP/TZVP`), active space (`Single Configuration`, `Valence CAS`, `Valence + Virtuals`, `Custom Configurations`), excitation truncation (`Full CAS`, `CIS`, `CISD`), number of roots, and PySCF determinant `FCI` oracle cross-check.
    - Review multi-root CI spectra, $\langle L^2 \rangle$ / $\langle S^2 \rangle$ purity badges, configuration/CSF mixing weights, $SO(3)$ orbital shells, and NIST ASD term centroid / `ATSP2K` published MCHF literature tables. Explicit banner clarifies **Fixed-Orbital LS-Coupled CI (MCHF radial optimization NOT performed)**.
-9. **Analysis**:
+9. **Electron Correlation (`v0.7.2`)**:
+   - Compute real **PySCF `2.15.1`** post-HF correlation energies across `RMP2`/`UMP2`/`ROMP2`, `RCISD`/`UCISD`, and bounded `FCI`/`CASCI` (`none` vs `noble-core`, multi-root `fix_spin_`) on single-determinant references (`RHF`, `UHF`, `ROHF`).
+   - Enforces guardrails (`AtomSphAverageRHF` disabled, `ROHF+CISD` blocked) and live preflight determinant/amplitude resource bounds, and populates a **Matched Cross-Method Comparison** table across shared `(Z, N, 2S, basis, frozenCore)` runs. See [`ELECTRON_CORRELATION_USER_GUIDE.md`](./ELECTRON_CORRELATION_USER_GUIDE.md).
+10. **Analysis**:
    - Inspect **2D XY / XZ / YZ heatmaps** (`Slice2DCanvas` for 1-e and PySCF HF volumes), radial distributions, $\langle r^k \rangle$ expectations, and the `118`-element `Inspector`.
-10. **Experiment History**:
-   - Manage locally persisted IndexedDB (`atoms_laboratory_db`) runs across all solvers (including `ls-term-ci`): **Load / Replay** (`loaded-from-store`) vs **Rerun Calculation** (`computed`), cancellation, and schema-validated JSON import/export.
+11. **Experiment History**:
+   - Manage locally persisted IndexedDB (`atoms_laboratory_db`) runs across all solvers (including `ls-term-ci` and `electron-correlation`), optional Firebase cloud sync & bookmarks, **Load / Replay** (`loaded-from-store`) vs **Rerun Calculation** (`computed`), cancellation, and schema-validated JSON import/export.
 
 ---
 

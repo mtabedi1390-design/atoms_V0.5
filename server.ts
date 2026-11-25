@@ -22,6 +22,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const BACKEND_SCRIPT = path.resolve(__dirname, "science", "hf_backend.py");
 const LS_BACKEND_SCRIPT = path.resolve(__dirname, "science", "ls_ci_backend.py");
+const CORRELATION_BACKEND_SCRIPT = path.resolve(__dirname, "science", "correlation_backend.py");
 const IS_PROD = process.env.NODE_ENV === "production";
 
 interface ServerCliArgs {
@@ -236,6 +237,193 @@ function getLSDetection(refresh = false): PythonDetection {
   }
   return cachedLSDetection;
 }
+
+let cachedCorrelationDetection: PythonDetection | null = null;
+function getCorrelationDetection(refresh = false): PythonDetection {
+  if (!cachedCorrelationDetection || refresh) {
+    cachedCorrelationDetection = detectPythonBackendForScript(CORRELATION_BACKEND_SCRIPT, {
+      methods: {},
+    });
+  }
+  return cachedCorrelationDetection;
+}
+
+const VALID_CORR_BASES = new Set([
+  "sto-3g",
+  "6-31g",
+  "cc-pvdz",
+  "cc-pvtz",
+  "aug-cc-pvtz",
+  "def2-svp",
+  "def2-tzvp",
+]);
+const VALID_CORR_REFS = new Set(["rhf", "uhf", "rohf"]);
+const VALID_CORR_METHODS = new Set(["rmp2", "ump2", "romp2", "rcisd", "ucisd", "fci"]);
+const VALID_FROZEN_MODES = new Set(["none", "noble-core"]);
+
+function sanitizeServerError(msg: string): string {
+  return msg
+    .replace(/\/[^\s"']+/g, "[path]")
+    .replace(/\r?\n[\s\S]*/g, "")
+    .slice(0, 300);
+}
+
+interface CorrelationValidationResult {
+  readonly ok: true;
+  readonly payload: Record<string, unknown>;
+}
+interface CorrelationValidationError {
+  readonly ok: false;
+  readonly code: string;
+  readonly error: string;
+}
+
+function validateCorrelationBody(
+  body: Record<string, unknown>,
+): CorrelationValidationResult | CorrelationValidationError {
+  const action = body.action === "estimate" ? "estimate" : body.action === undefined || body.action === "calculate" ? "calculate" : null;
+  if (!action) {
+    return { ok: false, code: "INVALID_ACTION", error: "Action must be 'calculate' or 'estimate'." };
+  }
+  const Z = Number(body.Z);
+  if (!Number.isInteger(Z) || Z < 1 || Z > 54) {
+    return { ok: false, code: "INVALID_Z", error: "Atomic number Z must be an integer in 1..54." };
+  }
+  const N = Number(body.N);
+  if (!Number.isInteger(N) || N < 1 || N > Z + 4) {
+    return { ok: false, code: "INVALID_N", error: `Electron count N must be an integer in 1..${Z + 4}.` };
+  }
+  const spin2S = body.spin2S === undefined ? 0 : Number(body.spin2S);
+  if (!Number.isInteger(spin2S) || spin2S < 0 || spin2S > N || (N - spin2S) % 2 !== 0) {
+    return { ok: false, code: "INVALID_SPIN", error: `Spin 2S=${String(body.spin2S)} is incompatible with N=${N}.` };
+  }
+  const basis = typeof body.basis === "string" ? body.basis.toLowerCase() : "";
+  if (!VALID_CORR_BASES.has(basis)) {
+    return { ok: false, code: "UNSUPPORTED_BASIS", error: `Unsupported basis '${String(body.basis)}'.` };
+  }
+  const referenceMethod = typeof body.referenceMethod === "string" ? body.referenceMethod.toLowerCase() : "";
+  if (referenceMethod === "atom-sph-avg") {
+    return {
+      ok: false,
+      code: "UNSUPPORTED_REFERENCE_METHOD",
+      error: "AtomSphAverageRHF is a fractional-occupation spherical ensemble and cannot be used as an MP2/CISD/FCI reference.",
+    };
+  }
+  if (!VALID_CORR_REFS.has(referenceMethod)) {
+    return {
+      ok: false,
+      code: "UNSUPPORTED_REFERENCE_METHOD",
+      error: `Unsupported referenceMethod '${String(body.referenceMethod)}'. Allowed: rhf, uhf, rohf.`,
+    };
+  }
+  const correlationMethod = typeof body.correlationMethod === "string" ? body.correlationMethod.toLowerCase() : "";
+  if (!VALID_CORR_METHODS.has(correlationMethod)) {
+    return {
+      ok: false,
+      code: "UNSUPPORTED_CORRELATION_METHOD",
+      error: `Unsupported correlationMethod '${String(body.correlationMethod)}'.`,
+    };
+  }
+  const frozenCoreMode =
+    body.frozenCoreMode === undefined ? "none" : String(body.frozenCoreMode).toLowerCase();
+  if (!VALID_FROZEN_MODES.has(frozenCoreMode)) {
+    return {
+      ok: false,
+      code: "INVALID_FROZEN_CORE",
+      error: "frozenCoreMode must be 'none' or 'noble-core'.",
+    };
+  }
+  const nRoots = body.nRoots === undefined ? 1 : Number(body.nRoots);
+  if (!Number.isInteger(nRoots) || nRoots < 1 || nRoots > 20) {
+    return {
+      ok: false,
+      code: "INVALID_NROOTS",
+      error: "nRoots must be an integer between 1 and 20.",
+    };
+  }
+  const fixSpin = body.fixSpin === undefined ? true : Boolean(body.fixSpin);
+
+  const safeScfOpts: Record<string, unknown> = {};
+  if (body.scfOptions && typeof body.scfOptions === "object" && !Array.isArray(body.scfOptions)) {
+    const rawScf = body.scfOptions as Record<string, unknown>;
+    if (typeof rawScf.convTol === "number" && Number.isFinite(rawScf.convTol)) safeScfOpts.convTol = rawScf.convTol;
+    if (typeof rawScf.convTolGrad === "number" && Number.isFinite(rawScf.convTolGrad)) safeScfOpts.convTolGrad = rawScf.convTolGrad;
+    if (typeof rawScf.maxCycle === "number" && Number.isInteger(rawScf.maxCycle)) safeScfOpts.maxCycle = rawScf.maxCycle;
+    if (typeof rawScf.initGuess === "string" && ["minao", "1e", "atom"].includes(rawScf.initGuess)) safeScfOpts.initGuess = rawScf.initGuess;
+    if (typeof rawScf.diis === "string" && ["cdiis", "ediis", "adiis", "none"].includes(rawScf.diis)) safeScfOpts.diis = rawScf.diis;
+    if (typeof rawScf.damp === "number" && Number.isFinite(rawScf.damp)) safeScfOpts.damp = rawScf.damp;
+    if (typeof rawScf.levelShift === "number" && Number.isFinite(rawScf.levelShift)) safeScfOpts.levelShift = rawScf.levelShift;
+  }
+
+  const safeCorrOpts: Record<string, unknown> = {};
+  if (body.correlationOptions && typeof body.correlationOptions === "object" && !Array.isArray(body.correlationOptions)) {
+    const rawCorr = body.correlationOptions as Record<string, unknown>;
+    if (typeof rawCorr.convTol === "number" && Number.isFinite(rawCorr.convTol)) safeCorrOpts.convTol = rawCorr.convTol;
+    if (typeof rawCorr.maxCycle === "number" && Number.isInteger(rawCorr.maxCycle)) safeCorrOpts.maxCycle = rawCorr.maxCycle;
+    if (typeof rawCorr.spinShift === "number" && Number.isFinite(rawCorr.spinShift)) safeCorrOpts.spinShift = rawCorr.spinShift;
+  }
+
+  return {
+    ok: true,
+    payload: {
+      action,
+      Z,
+      N,
+      spin2S,
+      basis,
+      referenceMethod,
+      correlationMethod,
+      frozenCoreMode,
+      nRoots,
+      fixSpin,
+      scfOptions: safeScfOpts,
+      correlationOptions: safeCorrOpts,
+    },
+  };
+}
+
+class BoundedAsyncQueue {
+  private active = 0;
+  private readonly maxConcurrent: number;
+  private readonly maxQueued: number;
+  private readonly waiters: Array<() => void> = [];
+
+  constructor(maxConcurrent = 1, maxQueued = 6) {
+    this.maxConcurrent = maxConcurrent;
+    this.maxQueued = maxQueued;
+  }
+
+  async run<T>(req: Request, fn: () => Promise<T>): Promise<T> {
+    if (this.active >= this.maxConcurrent) {
+      if (this.waiters.length >= this.maxQueued) {
+        throw new Error("QUEUE_FULL");
+      }
+      await new Promise<void>((resolve, reject) => {
+        const onAbort = () => {
+          const idx = this.waiters.indexOf(grant);
+          if (idx >= 0) this.waiters.splice(idx, 1);
+          reject(new Error("CLIENT_ABORTED"));
+        };
+        const grant = () => {
+          req.off("aborted", onAbort);
+          resolve();
+        };
+        req.once("aborted", onAbort);
+        this.waiters.push(grant);
+      });
+    }
+    this.active++;
+    try {
+      return await fn();
+    } finally {
+      this.active--;
+      const next = this.waiters.shift();
+      if (next) next();
+    }
+  }
+}
+
+const correlationQueue = new BoundedAsyncQueue(1, 6);
 
 const activeChildren = new Set<ChildProcess>();
 
@@ -473,6 +661,82 @@ async function startServer(): Promise<void> {
     }
   });
 
+  // Guard Electron Correlation endpoints with identical local origin protection,
+  // strict payload validation, and bounded concurrency queue.
+  app.use("/api/correlation", validateLocalApiOrigin);
+
+  app.get("/api/correlation/capabilities", (req: Request, res: Response) => {
+    const refresh = req.query.refresh === "1";
+    const det = getCorrelationDetection(refresh);
+    res.json(det.capabilities);
+  });
+
+  app.post("/api/correlation/calculate", async (req: Request, res: Response) => {
+    const det = getCorrelationDetection(false);
+    if (!det.executable) {
+      res.status(503).json({
+        ok: false,
+        code: "BACKEND_UNAVAILABLE",
+        error: "PySCF Electron Correlation Python backend is unavailable.",
+      });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown> | undefined;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      res.status(400).json({ ok: false, code: "INVALID_REQUEST", error: "JSON request body required." });
+      return;
+    }
+
+    const validated = validateCorrelationBody(body);
+    if (!validated.ok) {
+      res.status(400).json({
+        ok: false,
+        code: validated.code,
+        error: validated.error,
+      });
+      return;
+    }
+
+    try {
+      const result = await correlationQueue.run(req, () =>
+        runPythonCalculation(
+          det.executable!,
+          validated.payload,
+          req,
+          res,
+          120000,
+          CORRELATION_BACKEND_SCRIPT,
+        ),
+      );
+      if (result.error && result.ok === false) {
+        const status = result.code === "RESOURCE_LIMIT_EXCEEDED" ? 422 : 400;
+        res.status(status).json(result);
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "CLIENT_ABORTED") {
+        if (!res.headersSent) res.status(499).end();
+        return;
+      }
+      if (msg === "QUEUE_FULL") {
+        res.status(429).json({
+          ok: false,
+          code: "CONCURRENCY_LIMIT_REACHED",
+          error: "Too many concurrent electron correlation jobs queued. Please retry shortly.",
+        });
+        return;
+      }
+      res.status(500).json({
+        ok: false,
+        code: "CORRELATION_CALCULATION_ERROR",
+        error: sanitizeServerError(msg),
+      });
+    }
+  });
+
   let viteServer: { middlewares: express.RequestHandler; close: () => Promise<void> } | null = null;
 
   if (!IS_PROD) {
@@ -554,11 +818,14 @@ async function startServer(): Promise<void> {
   httpServer.listen(PORT, BIND_HOST, () => {
     const det = getDetection(false);
     const lsDet = getLSDetection(false);
+    const corrDet = getCorrelationDetection(false);
     const engine = (det.capabilities.engine as { version?: string } | undefined)?.version;
     console.log(
       `ATOMS server listening on http://${BIND_HOST}:${PORT} (${IS_PROD ? "production" : "development"}) · PySCF: ${
         det.executable ? `active (${engine ?? "unknown"})` : "unavailable"
-      } · LS-CI: ${lsDet.executable ? "active" : "unavailable"}`,
+      } · LS-CI: ${lsDet.executable ? "active" : "unavailable"} · Correlation: ${
+        corrDet.executable ? "active" : "unavailable"
+      }`,
     );
   });
 }

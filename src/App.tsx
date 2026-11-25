@@ -16,6 +16,7 @@ import { AnalysisWorkspace } from "@/components/laboratory/AnalysisWorkspace";
 import { ExperimentHistoryWorkspace } from "@/components/laboratory/ExperimentHistoryWorkspace";
 import { HartreeFockWorkspace } from "@/components/laboratory/HartreeFockWorkspace";
 import { AtomicTermsWorkspace } from "@/components/laboratory/AtomicTermsWorkspace";
+import { ElectronCorrelationWorkspace } from "@/components/laboratory/ElectronCorrelationWorkspace";
 import { useAtomsLaboratory } from "@/app/useAtomsLaboratory";
 import { elementByZ } from "@/data/elements";
 import { lFromKappa } from "@/domain/quantum";
@@ -670,7 +671,7 @@ export default function App() {
           )}
           <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1 text-[10px] text-zinc-400">
             <ScaleBar extentPm={extentPm} />
-            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.7.1</span>
+            <span>axes: <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z (polar)</span> · drag: orbit · right-drag: pan · wheel: zoom · ATOMS v0.7.2</span>
             {hfOverlayActive && lab.hfWorkbenchOverlay && (
               <div className="pointer-events-auto flex items-center gap-2 rounded-sm border border-sky-800 bg-sky-950/75 px-2 py-1 text-sky-200">
                 <span>
@@ -851,6 +852,24 @@ export default function App() {
             }}
             onCancelExecution={lab.cancelExecution}
             onRunLSCI={lab.runLSTermCIExperiment}
+          />
+        </div>
+      )}
+
+      {lab.config.workspace === "electron-correlation" && (
+        <div className="min-h-0 flex-1">
+          <ElectronCorrelationWorkspace
+            initialZ={state.Z}
+            capabilities={lab.correlationCapabilities}
+            probing={lab.correlationProbing}
+            executions={lab.executions}
+            selectedResult={lab.selectedResult}
+            history={lab.history}
+            onRefreshCapabilities={(refresh) => {
+              void lab.refreshCorrelationCapabilities(refresh);
+            }}
+            onCancelExecution={lab.cancelExecution}
+            onRunCorrelation={lab.runElectronCorrelationExperiment}
           />
         </div>
       )}

@@ -22,7 +22,11 @@ export type ProviderCapability =
   | "spin-density"
   | "scf-diagnostics"
   | "ls-term-ci"
-  | "ls-term-enumeration";
+  | "ls-term-enumeration"
+  | "electron-correlation"
+  | "mp2-perturbation"
+  | "cisd-ci"
+  | "full-ci";
 
 export type ObservableKind = ProviderCapability;
 

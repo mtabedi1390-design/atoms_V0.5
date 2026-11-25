@@ -39,10 +39,12 @@ describe("Firebase Blueprint, Security Rules & Payload Sanitization", () => {
       "spectroscopy-series",
       "multi-electron-hf",
       "ls-term-ci",
+      "electron-correlation",
     ]) {
       expect(blueprint.entities.CloudExperimentRecord.properties.kind.enum).toContain(kind);
       expect(rulesText).toContain(`'${kind}'`);
     }
+    expect(blueprint.entities.AtomicBookmark.properties.workspace.enum).toContain("electron-correlation");
   });
 
   it("sanitizes UserAccount and AtomicBookmark fields to adhere strictly to blueprint bounds", () => {

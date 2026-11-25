@@ -28,6 +28,13 @@ import {
   type LSActiveSpaceMode,
   type SubshellOccupancySpec,
 } from "@/physics/ls";
+import {
+  validateReferenceAndMethodCompatibility,
+  type CorrelationMethodId,
+  type CorrelationOptions,
+  type CorrelationReferenceMethod,
+  type FrozenCoreMode,
+} from "@/physics/correlation";
 import { assertValid, validationFromIssues, type ValidationIssue, type ValidationResult } from "../validation";
 
 export interface NonRelativisticState {
@@ -98,13 +105,28 @@ export interface LSTermCIState {
   readonly crossCheckPyscfFci: boolean;
 }
 
+export interface ElectronCorrelationState {
+  readonly kind: "electron-correlation";
+  readonly N: number;
+  readonly spin2S: number;
+  readonly basis: HFBasisId;
+  readonly referenceMethod: CorrelationReferenceMethod;
+  readonly correlationMethod: CorrelationMethodId;
+  readonly frozenCoreMode: FrozenCoreMode;
+  readonly nRoots: number;
+  readonly fixSpin: boolean;
+  readonly scfOptions?: HFSCFOptions;
+  readonly correlationOptions?: CorrelationOptions;
+}
+
 export type QuantumState =
   | NonRelativisticState
   | RelativisticState
   | SuperpositionState
   | ConfigurationAverageState
   | MultiElectronHFState
-  | LSTermCIState;
+  | LSTermCIState
+  | ElectronCorrelationState;
 
 export interface TransitionPair<TState extends NonRelativisticState | RelativisticState = NonRelativisticState | RelativisticState> {
   readonly initial: TState;
@@ -214,6 +236,22 @@ export function createLSTermCIState(
 ): LSTermCIState {
   const s: LSTermCIState = { kind: "ls-term-ci", ...params };
   assertValid(validateLSTermCIState(s), "createLSTermCIState");
+  return s;
+}
+
+export function createElectronCorrelationState(
+  params: Omit<ElectronCorrelationState, "kind" | "nRoots" | "fixSpin"> & {
+    readonly nRoots?: number;
+    readonly fixSpin?: boolean;
+  },
+): ElectronCorrelationState {
+  const s: ElectronCorrelationState = {
+    kind: "electron-correlation",
+    ...params,
+    nRoots: params.nRoots ?? 1,
+    fixSpin: params.fixSpin ?? false,
+  };
+  assertValid(validateElectronCorrelationState(s), "createElectronCorrelationState");
   return s;
 }
 
@@ -358,6 +396,51 @@ export function validateLSTermCIState(s: LSTermCIState): ValidationResult {
   return validationFromIssues(issues);
 }
 
+export function validateElectronCorrelationState(s: ElectronCorrelationState): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  if (!Number.isInteger(s.N) || s.N < 1) {
+    issues.push({
+      severity: "error",
+      code: "CORR_INVALID_N",
+      field: "N",
+      message: `Electron count N must be >= 1 (got ${s.N}).`,
+    });
+  }
+  if (!Number.isInteger(s.spin2S) || s.spin2S < 0 || s.spin2S > s.N || (s.N - s.spin2S) % 2 !== 0) {
+    issues.push({
+      severity: "error",
+      code: "CORR_INVALID_SPIN",
+      field: "spin2S",
+      message: `Spin 2S=${s.spin2S} is incompatible with N=${s.N} electrons.`,
+    });
+  }
+  if (!Number.isInteger(s.nRoots) || s.nRoots < 1 || s.nRoots > 20) {
+    issues.push({
+      severity: "error",
+      code: "CORR_INVALID_NROOTS",
+      field: "nRoots",
+      message: `Requested nRoots must be between 1 and 20 (got ${s.nRoots}).`,
+    });
+  }
+  const compat = validateReferenceAndMethodCompatibility({
+    Z: Math.max(1, s.N),
+    N: s.N,
+    spin2S: s.spin2S,
+    referenceMethod: s.referenceMethod,
+    correlationMethod: s.correlationMethod,
+    frozenCoreMode: s.frozenCoreMode,
+  });
+  if (!compat.valid) {
+    issues.push({
+      severity: "error",
+      code: "CORR_INCOMPATIBLE_PAIR",
+      field: "correlationMethod",
+      message: compat.reason ?? "Incompatible reference and correlation method.",
+    });
+  }
+  return validationFromIssues(issues);
+}
+
 export function validateQuantumState(s: QuantumState): ValidationResult {
   switch (s.kind) {
     case "nonrelativistic":
@@ -376,6 +459,8 @@ export function validateQuantumState(s: QuantumState): ValidationResult {
       return validateMultiElectronHFState(s);
     case "ls-term-ci":
       return validateLSTermCIState(s);
+    case "electron-correlation":
+      return validateElectronCorrelationState(s);
   }
 }
 
@@ -410,5 +495,7 @@ export function formatQuantumStateLabel(s: QuantumState): string {
       const term = formatTermSymbol(s.targetSpin2S, s.targetL, s.targetParity);
       return `LS-CI ${term} / ${s.basis} (${cfg || `N=${s.N}`}, ${s.activeSpaceMode})`;
     }
+    case "electron-correlation":
+      return `${s.referenceMethod.toUpperCase()}/${s.correlationMethod.toUpperCase()} / ${s.basis} (N=${s.N}, 2S=${s.spin2S}, frozen=${s.frozenCoreMode})`;
   }
 }

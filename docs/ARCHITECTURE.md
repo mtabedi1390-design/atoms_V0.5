@@ -1,30 +1,32 @@
-# ATOMS v0.7.0 — Software & Scientific Architecture
+# ATOMS v0.7.2 — Software & Scientific Architecture
 
-ATOMS v0.7.0 (**Multi-Electron Atomic Structure**) extends the verified `v0.6.1` hydrogenic laboratory with a live **PySCF `2.15.1` + `libcint` + Basis Set Exchange `0.12`** multi-electron Hartree–Fock backend (`server.ts` + `science/hf_backend.py`) while preserving all `v0.5.0` and `v0.6.1` solvers, rendering, datasets, and parity tests.
+ATOMS v0.7.2 (**Post-Hartree–Fock Electron Correlation**) extends the verified `v0.7.1` LS-Coupled CI and `v0.7.0` Multi-Electron Hartree–Fock laboratory with live **PySCF `2.15.1` + `libcint` + Basis Set Exchange `0.12`** MP2, CISD, and bounded direct FCI/CASCI solvers (`server.ts` + `science/correlation_backend.py`) while preserving all `v0.5.0`–`v0.7.1` solvers, rendering, datasets, and parity tests.
 
 ---
 
 ## 1. Architectural Principles
 
 1. **General-First, Capability-Gated**:
-   Domain objects (`AtomicSystem`, `QuantumState`, `ExperimentDefinition`) represent arbitrary elements (`Z = 1..118`), ionization charges (`q = Z - N`, including anions and cations), isotopes, nuclear models, one-electron nonrelativistic/relativistic states, and `MultiElectronHFState` configurations cleanly. Every `PhysicsProvider` implements `supports(system, state)` to enforce mathematical and physical validity domains before execution—never substituting point-Coulomb formulas for multi-electron atoms or applying hydrogenic reduced-mass scaling to multi-electron HF.
+   Domain objects (`AtomicSystem`, `QuantumState`, `ExperimentDefinition`) represent arbitrary elements (`Z = 1..118`), ionization charges (`q = Z - N`, including anions and cations), isotopes, nuclear models, one-electron nonrelativistic/relativistic states, `MultiElectronHFState`, `LSTermCIState`, and `ElectronCorrelationState` cleanly. Every `PhysicsProvider` implements `supports(system, state)` to enforce mathematical and physical validity domains before execution—never substituting point-Coulomb formulas for multi-electron atoms or using `AtomSphAverageRHF` ensembles for MP2/CISD/FCI.
 2. **Strict Layer Isolation (Zero React/Three/Node Built-In Imports in Pure Core Modules)**:
-   - Verified via CI/grep: `src/domain/`, `src/physics/`, `src/science/`, `src/experiments/`, `src/workers/`, `src/numerics/`, and `src/sampling/` (outside `__tests__`) contain **0** imports from `react`, `three`, or `node:*`.
+   - Verified via CI/grep: `src/domain/`, `src/physics/`, `src/experiments/`, `src/workers/`, `src/numerics/`, and `src/sampling/` (outside `__tests__`) contain **0** imports from `react`, `three`, `firebase`, `window`, `document`, or `node:*`.
    - Rendering modules (`src/render/`, `src/components/`) consume typed buffers and structured results produced off-thread in Web Workers (`src/sampling/sampler.worker.ts`, `src/workers/experiment.worker.ts`, `src/workers/visualization.worker.ts`).
-3. **Truthful Local Process Boundary (`server.ts` ↔ `science/hf_backend.py`)**:
+3. **Truthful Local Process Boundary (`server.ts` ↔ Python PySCF Backends)**:
    - Compiled Python/C libraries (`PySCF`, `libcint`, `SciPy`) run strictly inside a local Python environment (`.venv/bin/python`, `/opt/atoms-py/bin/python`, or `ATOMS_PYTHON`) spawned by Express 5 (`server.ts`).
-   - Browser Web Workers communicate with localhost `/api/hf/*` via blob-origin-safe `HFTransport` (`src/physics/hf/transport.ts`) with real `AbortSignal` / `SIGTERM` cancellation. Offline previews disable HF runs cleanly instead of mocking scientific data.
-4. **Preservation of `v0.5.0` and `v0.6.1` Core**:
-   All prior modules (`elements.ts`, `hydrogenic.ts`, `special.ts`, `diracFock.ts`, `sampler.ts`, `OrbitalScene.ts`, `native/quantum_core.hpp`, Schrödinger/Dirac providers, E1 transitions, spectroscopy, PySCF & Lobato JSON snapshots) remain preserved and regression-tested.
+   - Browser Web Workers communicate with localhost `/api/hf/*`, `/api/ls/*`, and `/api/correlation/*` via blob-origin-safe transports (`src/physics/*/transport.ts`) with real `AbortSignal` / `SIGTERM` cancellation and bounded concurrency queues. Offline previews disable live PySCF runs cleanly instead of mocking scientific data.
+4. **Preservation of `v0.5.0`–`v0.7.1` Core**:
+   All prior modules (`elements.ts`, `hydrogenic.ts`, `special.ts`, `diracFock.ts`, `sampler.ts`, `OrbitalScene.ts`, `native/quantum_core.hpp`, Schrödinger/Dirac providers, E1 transitions, spectroscopy, live HF, Fixed-Orbital LS-CI, PySCF & Lobato JSON snapshots) remain preserved and regression-tested.
 
 ---
 
-## 2. Implemented Module Map (`v0.7.0`)
+## 2. Implemented Module Map (`v0.7.2`)
 
 ```text
-server.ts                  Express 5 + Vite dev/prod host + /api/hf/capabilities & /api/hf/calculate
+server.ts                  Express 5 + Vite dev/prod host + /api/hf/*, /api/ls/*, & /api/correlation/* (concurrency queue + strict validation)
 science/
-  hf_backend.py            PySCF 2.15.1 + libcint + BSE 0.12 live engine (RHF/UHF/ROHF/AtomSphAvg + 110-pt Lebedev + 3D GTO grids)
+  hf_backend.py            PySCF 2.15.1 + libcint + BSE 0.12 live HF engine (RHF/UHF/ROHF/AtomSphAvg + 110-pt Lebedev + 3D GTO grids)
+  ls_ci_backend.py         Exact (L², S², Π) LS-CSF projection & Slater–Condon Fixed-Orbital LS-CI engine (`pyscf.fci` cross-checked)
+  correlation_backend.py   Post-HF MP2 (RMP2/UMP2/ROMP2), CISD (RCISD/UCISD), & bounded FCI/CASCI/direct_uhf engine
   requirements.txt         Pinned Python dependencies (pyscf==2.15.1, basis-set-exchange==0.12, numpy, scipy, h5py)
 scripts/
   setup_python_backend.sh  Isolated .venv installer (uv / venv / --without-pip + get-pip fallback)
@@ -48,10 +50,14 @@ src/
       configurations.ts    Curated NIST ground & Aufbau+Hund subshell proposal + spin validation
       benchmarks.ts        Pinned compas/sphf (MIT), Koga–Thakkar (1999), and 1-e exact (-Z^2/2) references
       transport.ts         Blob-Worker-origin-safe HTTP HFTransport + capability cache
+    ls/                    Russell–Saunders enumeration, Clebsch–Gordan coupling, NIST/ATSP2K benchmarks, /api/ls/* transport
+    correlation/           MP2/CISD/FCI catalog, exact spatial orbital preflight estimator, benchmarks, /api/correlation/* transport
     providers/
       contracts.ts         PhysicsProvider interface, ProviderCapability, CalculationResult
-      registry.ts          PhysicsProviderRegistry & createDefaultProviderRegistry() (incl. pyscf-hf-live)
+      registry.ts          PhysicsProviderRegistry & createDefaultProviderRegistry() (incl. hf, ls-term-ci, correlation)
       hartreeFock/index.ts pyscfLiveProvider (`pyscf-hf-live` 0.7.0): gating, SCF rejection, & 5 post-SCF validation checks
+      lsTermCi/index.ts    lsTermCiProvider (`atoms-ls-term-ci` 0.7.1)
+      correlation/index.ts pyscfCorrelationProvider (`pyscf-correlation-live` 0.7.2): guardrails, preflight, energy identity
       schrodinger/index.ts SchrodingerCoulombProvider (bound energies, reduced mass, wavefunctions, <r^k>, radial PDF)
       dirac/index.ts       DiracCoulombProvider (4-spinor P/Q radial + Omega_{kappa,m_j}, Sommerfeld-Dirac spectrum, fine structure)
       legacyAdapters.ts    v0.5 adapters: lobatoDFProvider, pyscfHFProvider, slaterProvider, datatomsMCDFProvider, graspMCDHFProvider
@@ -62,23 +68,23 @@ src/
     isosurface/marchingTetrahedra.ts Watertight 6-tetrahedra 3D isosurface (hydrogenic + PySCF HF grids) & 2D slice evaluators
   experiments/
     schema/index.ts        Versioned ExperimentDefinition (atom-exp/v1), ExperimentExecution, ExperimentResultRecord
-    registry/index.ts      Supported experiment kinds (incl. multi-electron-hf)
+    registry/index.ts      Supported experiment kinds (incl. multi-electron-hf, ls-term-ci, electron-correlation)
     validation/index.ts    Pre-execution validation of system, quantum states, provider capability, & numerical parameters
     execution/             ExperimentScheduler, ExperimentRunner, Transition/Spectroscopy dispatcher
     results/index.ts       ResultRegistry tracking computed vs loaded-from-store vs imported-json provenance
     persistence/           IndexedDBExperimentStore (atoms_laboratory_db v1) + ExperimentSerializer (atoms-experiment-bundle v1)
   workers/
     protocol.ts            Structured-clone-safe worker protocol
-    experiment.worker.ts   Off-main-thread physics experiment execution (1-e & PySCF HF)
+    experiment.worker.ts   Off-main-thread physics experiment execution (1-e, HF, LS-CI, & Electron Correlation)
     experimentClient.ts    Promise/AbortSignal client with stale-result protection
     browserWorkerFactory.ts Browser Worker factory for Vite ?worker&inline builds
     visualization.worker.ts Off-main-thread Dirac 4-spinor sampling & 3D Marching Tetrahedra extraction
     visualizationClient.ts  Request-ID-filtered WebGL buffer client with Transferable Float32Arrays
   sampling/ & render/      v0.5 seeded xoshiro128** inverse-CDF samplers & Three.js/WebGL2 OrbitalScene renderer
   data/                    118 IUPAC elements, NIST ASD (Z=1..108), Lobato DF (Z=1..118), bundled PySCF snapshots, NIST 1H lines
-  app/useAtomsLaboratory.ts Unified laboratory & ExperimentRunner hook (incl. HF capabilities probe & 3D HF overlay state)
+  app/useAtomsLaboratory.ts Unified laboratory & ExperimentRunner hook (incl. HF/LS/Correlation probes & 3D HF overlay state)
   components/
-    laboratory/            WorkspaceNav (9 workspaces) & all workspace views (incl. HartreeFockWorkspace.tsx)
+    laboratory/            WorkspaceNav (11 workspaces incl. HartreeFock, AtomicTerms, ElectronCorrelation) & views
     ControlRail.tsx, RadialPlot.tsx, Slice2DCanvas.tsx, EnergyDiagram.tsx, Inspector.tsx, TelemetryBar.tsx, PeriodicTable.tsx
 ```
 

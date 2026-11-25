@@ -219,7 +219,7 @@ export function sanitizeCloudExperimentFields(input: {
     providerVersion: truncateRequiredString(
       input.definition.providerVersion,
       BLUEPRINT_LIMITS.providerVersionMaxLength,
-      "0.7.1",
+      "0.7.2",
     ),
     Z: clampInt(input.definition.system.Z, 1, 118),
     N: clampInt(input.definition.system.N, 0, 120),
